@@ -73,7 +73,6 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
     try {
       const result = await dataService.uploadFile(file, selectedDB, selectedTable, (progressEvent) => {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / (progressEvent.total || file.size));
-        // Cap visual progress at 90% until backend confirms completion
         setStatus(prev => ({ 
           ...prev, 
           status: 'uploading', 
@@ -99,192 +98,192 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="h-[calc(100vh-140px)] grid grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
-      {/* 1. Database Selection (CARDS) */}
-      <section>
-        <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-           <Database className="w-4 h-4" /> 1. Pilih Database Tujuan
-        </h3>
-        
-        {databases.length === 0 ? (
-           <div className="p-8 text-center bg-gray-50 border border-gray-200 rounded-2xl text-gray-400">
-              Memuat Database...
-           </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {databases.map(db => (
-              <button
-                key={db}
-                onClick={() => {
-                   if(status.status !== 'uploading') setSelectedDB(db);
-                }}
-                className={`relative group p-4 rounded-2xl border text-left transition-all duration-200 shadow-sm hover:shadow-md flex flex-col gap-3 ${
-                  selectedDB === db 
-                    ? 'bg-brand-600 border-brand-600 text-white ring-4 ring-brand-100' 
-                    : 'bg-white border-gray-200 text-gray-600 hover:border-brand-300 hover:bg-gray-50'
-                } ${status.status === 'uploading' ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <div className={`p-2 rounded-xl w-fit ${selectedDB === db ? 'bg-white/20' : 'bg-gray-100 group-hover:bg-brand-50'}`}>
-                  <Server className={`w-5 h-5 ${selectedDB === db ? 'text-white' : 'text-gray-500 group-hover:text-brand-600'}`} />
-                </div>
-                <div>
-                   <span className="text-xs font-semibold opacity-70 block mb-0.5">Database</span>
-                   <span className="font-bold text-sm truncate block" title={db}>{db}</span>
-                </div>
-                {selectedDB === db && (
-                  <div className="absolute top-4 right-4">
-                     <CheckCircle className="w-5 h-5 text-white/90" />
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* 2. Table Selection (PILLS) */}
-      {selectedDB && (
-        <section className="animate-in fade-in slide-in-from-left-2 duration-300">
-          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-            <TableIcon className="w-4 h-4" /> 2. Pilih Tabel Tujuan
+      {/* COLUMN 1: DATABASE LIST (Span 3) */}
+      <div className="col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+             <Database className="w-3.5 h-3.5" /> 1. Database
           </h3>
-          
-          <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-             {loadingTables ? (
-                <div className="flex items-center gap-2 text-gray-400 text-sm">
-                   <RefreshCw className="w-4 h-4 animate-spin" /> Mengambil tabel dari <strong>{selectedDB}</strong>...
-                </div>
-             ) : tables.length === 0 ? (
-                <div className="text-gray-400 text-sm italic">
-                   Tidak ada tabel ditemukan di database ini.
-                </div>
-             ) : (
-                <div className="flex flex-wrap gap-2">
-                   {tables.map(table => (
-                      <button
-                        key={table}
-                        onClick={() => {
-                           if(status.status !== 'uploading') setSelectedTable(table);
-                        }}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all border flex items-center gap-2 ${
-                           selectedTable === table
-                             ? 'bg-brand-50 border-brand-200 text-brand-700 shadow-sm ring-1 ring-brand-200'
-                             : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
-                        } ${status.status === 'uploading' ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      >
-                         <TableIcon className="w-3.5 h-3.5 opacity-70" />
-                         {table}
-                         {selectedTable === table && <CheckCircle className="w-3.5 h-3.5 text-brand-600" />}
-                      </button>
-                   ))}
-                </div>
-             )}
-          </div>
-        </section>
-      )}
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+           {databases.length === 0 ? (
+             <div className="text-center text-xs text-gray-400 py-4">Memuat...</div>
+           ) : (
+             databases.map(db => (
+               <button
+                 key={db}
+                 onClick={() => { if(status.status !== 'uploading') setSelectedDB(db); }}
+                 className={`w-full text-left px-4 py-3 rounded-xl transition-all flex items-center justify-between group ${
+                   selectedDB === db 
+                     ? 'bg-brand-50 text-brand-700 font-bold border border-brand-200' 
+                     : 'hover:bg-gray-50 text-gray-600 border border-transparent'
+                 } ${status.status === 'uploading' ? 'opacity-50 cursor-not-allowed' : ''}`}
+               >
+                 <div className="flex items-center gap-3 overflow-hidden">
+                    <Server className={`w-4 h-4 shrink-0 ${selectedDB === db ? 'text-brand-600' : 'text-gray-400'}`} />
+                    <span className="truncate text-sm">{db}</span>
+                 </div>
+                 {selectedDB === db && <ChevronRight className="w-4 h-4 text-brand-400" />}
+               </button>
+             ))
+           )}
+        </div>
+      </div>
 
-      {/* 3. File Upload Area */}
-      {selectedDB && selectedTable && (
-        <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-             <UploadIcon className="w-4 h-4" /> 3. Upload File Data
-           </h3>
+      {/* COLUMN 2: TABLE LIST (Span 3) */}
+      <div className="col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+        <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+             <TableIcon className="w-3.5 h-3.5" /> 2. Tabel
+          </h3>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
+           {!selectedDB ? (
+             <div className="flex flex-col items-center justify-center h-full text-gray-300 gap-2">
+                <Database className="w-8 h-8 opacity-20" />
+                <span className="text-xs">Pilih database dulu</span>
+             </div>
+           ) : loadingTables ? (
+             <div className="flex items-center justify-center py-8 text-gray-400 gap-2 text-xs">
+                <RefreshCw className="w-4 h-4 animate-spin" /> Memuat tabel...
+             </div>
+           ) : tables.length === 0 ? (
+             <div className="text-center text-xs text-gray-400 py-8 italic">Tidak ada tabel</div>
+           ) : (
+             tables.map(table => (
+               <button
+                 key={table}
+                 onClick={() => { if(status.status !== 'uploading') setSelectedTable(table); }}
+                 className={`w-full text-left px-4 py-2.5 rounded-lg transition-all flex items-center justify-between ${
+                   selectedTable === table 
+                     ? 'bg-brand-50 text-brand-700 font-bold border border-brand-200 shadow-sm' 
+                     : 'hover:bg-gray-50 text-gray-600 border border-transparent'
+                 } ${status.status === 'uploading' ? 'opacity-50 cursor-not-allowed' : ''}`}
+               >
+                 <div className="flex items-center gap-2 overflow-hidden">
+                    <TableIcon className={`w-3.5 h-3.5 shrink-0 ${selectedTable === table ? 'text-brand-500' : 'text-gray-300'}`} />
+                    <span className="truncate text-sm">{table}</span>
+                 </div>
+                 {selectedTable === table && <CheckCircle className="w-3.5 h-3.5 text-brand-500" />}
+               </button>
+             ))
+           )}
+        </div>
+      </div>
 
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-            <div className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${
-              file ? 'border-brand-400 bg-brand-50/30' : 'border-gray-200 hover:border-brand-300 hover:bg-gray-50'
-            }`}>
-                <input 
-                  type="file" 
-                  id="fileInput" 
-                  className="hidden" 
-                  accept=".csv,.xlsx,.xls" 
-                  onChange={handleFileChange}
-                  disabled={status.status === 'uploading'}
-                />
-                
-                {!file ? (
-                  <label htmlFor="fileInput" className="cursor-pointer block group">
-                    <div className="w-20 h-20 bg-brand-50 text-brand-500 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform shadow-sm">
-                      <UploadIcon className="w-10 h-10" />
-                    </div>
-                    <h4 className="text-xl font-bold text-gray-800">Tarik file Excel atau CSV ke sini</h4>
-                    <p className="text-gray-400 mt-2 text-sm">Mendukung .xlsx, .xls, .csv (Maks 100MB)</p>
-                  </label>
-                ) : (
-                  <div className="animate-in zoom-in-95 duration-200">
-                    <FileSpreadsheet className="w-16 h-16 text-brand-600 mx-auto mb-4 drop-shadow-lg" />
-                    <p className="text-xl font-bold text-gray-800">{file.name}</p>
-                    <p className="text-gray-400 mb-8 font-medium">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+      {/* COLUMN 3: UPLOAD AREA (Span 6) */}
+      <div className="col-span-6 flex flex-col">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex-1 p-8 flex flex-col">
+           <div className="mb-6">
+              <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2 mb-1">
+                <UploadIcon className="w-3.5 h-3.5" /> 3. Upload File
+              </h3>
+              <p className="text-xs text-gray-400">Pastikan format kolom Excel sesuai dengan tabel.</p>
+           </div>
+
+           {!selectedDB || !selectedTable ? (
+             <div className="flex-1 border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center text-gray-300 gap-3">
+               <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center">
+                 <AlertTriangle className="w-8 h-8 opacity-20" />
+               </div>
+               <p className="text-sm">Pilih Database & Tabel untuk mulai</p>
+             </div>
+           ) : (
+             <div className="flex-1 flex flex-col justify-center">
+                <div className={`border-2 border-dashed rounded-2xl p-10 text-center transition-all duration-300 ${
+                  file ? 'border-brand-400 bg-brand-50/30' : 'border-gray-200 hover:border-brand-300 hover:bg-gray-50'
+                }`}>
+                    <input 
+                      type="file" 
+                      id="fileInput" 
+                      className="hidden" 
+                      accept=".csv,.xlsx,.xls" 
+                      onChange={handleFileChange}
+                      disabled={status.status === 'uploading'}
+                    />
                     
-                    {status.status === 'idle' || status.status === 'error' ? (
-                      <div className="flex justify-center gap-4">
-                        <button 
-                          onClick={() => setFile(null)}
-                          className="px-6 py-2.5 text-gray-600 hover:text-gray-900 font-medium hover:bg-gray-100 rounded-xl transition-colors"
-                        >
-                          Ganti File
-                        </button>
-                        <button 
-                          onClick={handleUpload}
-                          disabled={!selectedTable || !selectedDB}
-                          className="px-8 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold shadow-lg shadow-brand-200 hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
-                        >
-                          Mulai Upload <ArrowRight className="w-4 h-4" />
-                        </button>
+                    {!file ? (
+                      <label htmlFor="fileInput" className="cursor-pointer block group">
+                        <div className="w-16 h-16 bg-brand-50 text-brand-500 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform shadow-sm">
+                          <UploadIcon className="w-8 h-8" />
+                        </div>
+                        <h4 className="text-lg font-bold text-gray-800">Upload Excel / CSV</h4>
+                        <p className="text-gray-400 mt-2 text-xs">Drag & Drop atau Klik (Max 100MB)</p>
+                      </label>
+                    ) : (
+                      <div className="animate-in zoom-in-95 duration-200">
+                        <FileSpreadsheet className="w-12 h-12 text-brand-600 mx-auto mb-3" />
+                        <p className="text-lg font-bold text-gray-800 truncate px-4">{file.name}</p>
+                        <p className="text-gray-400 mb-6 font-medium text-xs">{(file.size / (1024 * 1024)).toFixed(2)} MB</p>
+                        
+                        {status.status === 'idle' || status.status === 'error' ? (
+                          <div className="flex justify-center gap-3">
+                            <button 
+                              onClick={() => setFile(null)}
+                              className="px-4 py-2 text-gray-600 hover:text-gray-900 font-medium hover:bg-gray-100 rounded-lg transition-colors text-sm"
+                            >
+                              Ganti
+                            </button>
+                            <button 
+                              onClick={handleUpload}
+                              className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2 text-sm"
+                            >
+                              Mulai Upload <ArrowRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                )}
-            </div>
-
-            {/* Status Display */}
-            {status.status !== 'idle' && (
-              <div className="mt-8">
-                <div className="flex items-center justify-between mb-2">
-                    <span className={`font-bold text-sm ${
-                      status.status === 'error' ? 'text-red-700' : 
-                      status.status === 'success' ? 'text-green-600' : 'text-brand-600'
-                    }`}>
-                      {status.status === 'uploading' ? 'Sedang Memproses Data...' : 
-                      status.status === 'success' ? 'Upload Selesai' : 
-                      status.status === 'error' ? 'Upload Gagal' : ''}
-                    </span>
-                    <span className="text-gray-400 text-xs font-mono bg-gray-100 px-2 py-1 rounded">{status.progress}%</span>
+                    )}
                 </div>
-                
-                <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-500 ease-out rounded-full ${
-                        status.status === 'error' ? 'bg-red-600' : 
-                        status.status === 'success' ? 'bg-green-500' : 'bg-brand-500 relative'
-                    }`}
-                    style={{ width: `${status.progress}%` }}
-                  >
-                    {status.status === 'uploading' && (
-                      <div className="absolute inset-0 bg-white/30 animate-[shimmer_1.5s_infinite]"></div>
+
+                {/* Status Section */}
+                {status.status !== 'idle' && (
+                  <div className="mt-6 animate-in fade-in slide-in-from-bottom-2">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className={`font-bold text-xs ${
+                          status.status === 'error' ? 'text-red-700' : 
+                          status.status === 'success' ? 'text-green-600' : 'text-brand-600'
+                        }`}>
+                          {status.status === 'uploading' ? 'Memproses Data...' : 
+                          status.status === 'success' ? 'Selesai' : 'Gagal'}
+                        </span>
+                        <span className="text-gray-400 text-[10px] font-mono bg-gray-100 px-2 py-0.5 rounded">{status.progress}%</span>
+                    </div>
+                    
+                    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-500 ease-out rounded-full ${
+                            status.status === 'error' ? 'bg-red-600' : 
+                            status.status === 'success' ? 'bg-green-500' : 'bg-brand-500 relative'
+                        }`}
+                        style={{ width: `${status.progress}%` }}
+                      >
+                        {status.status === 'uploading' && (
+                          <div className="absolute inset-0 bg-white/30 animate-[shimmer_1.5s_infinite]"></div>
+                        )}
+                      </div>
+                    </div>
+
+                    {status.message && (
+                      <div className={`mt-4 p-3 rounded-lg flex items-start gap-2 text-xs border shadow-sm ${
+                        status.status === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 
+                        status.status === 'success' ? 'bg-green-50 text-green-700 border-green-100' : 
+                        'bg-brand-50 text-brand-700 border-brand-100'
+                      }`}>
+                          {status.status === 'error' && <AlertTriangle className="w-4 h-4 shrink-0" />}
+                          {status.status === 'success' && <CheckCircle className="w-4 h-4 shrink-0" />}
+                          {status.status === 'uploading' && <RefreshCw className="w-4 h-4 shrink-0 animate-spin" />}
+                          <span className="leading-relaxed font-medium">{status.message}</span>
+                      </div>
                     )}
                   </div>
-                </div>
-
-                {status.message && (
-                  <div className={`mt-6 p-4 rounded-xl flex items-start gap-3 text-sm border shadow-sm ${
-                    status.status === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 
-                    status.status === 'success' ? 'bg-green-50 text-green-700 border-green-100' : 
-                    'bg-brand-50 text-brand-700 border-brand-100'
-                  }`}>
-                      {status.status === 'error' && <AlertTriangle className="w-5 h-5 shrink-0" />}
-                      {status.status === 'success' && <CheckCircle className="w-5 h-5 shrink-0" />}
-                      {status.status === 'uploading' && <RefreshCw className="w-5 h-5 shrink-0 animate-spin" />}
-                      <span className="leading-relaxed font-medium">{status.message}</span>
-                  </div>
                 )}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
+             </div>
+           )}
+        </div>
+      </div>
     </div>
   );
 };

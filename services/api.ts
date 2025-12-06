@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { API_URL, LOCAL_STORAGE_KEY, USE_MOCK_API } from '../constants';
 import { AuthResponse, User, UserRole, SchemaAnalysis, TableColumn } from '../types';
@@ -48,6 +47,19 @@ export const dataService = {
     if (USE_MOCK_API) return mockDataService.getTables(dbName);
     const response = await api.get(`/data/tables?db=${dbName}`);
     return response.data.tables;
+  },
+
+  // NEW: Get columns and types of an existing table
+  getTableSchema: async (dbName: string, tableName: string): Promise<TableColumn[]> => {
+    if (USE_MOCK_API) return []; 
+    const response = await api.get(`/data/table-schema?db=${dbName}&table=${tableName}`);
+    return response.data;
+  },
+
+  // NEW: Alter column type
+  alterTableColumn: async (dbName: string, tableName: string, columnName: string, newType: string): Promise<void> => {
+    if (USE_MOCK_API) return;
+    await api.post('/data/alter-table', { databaseName: dbName, tableName, columnName, newType });
   },
 
   analyzeFile: async (file: File): Promise<SchemaAnalysis> => {

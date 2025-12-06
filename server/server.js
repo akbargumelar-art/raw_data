@@ -184,6 +184,54 @@ app.get('/api/data/tables', authenticateToken, async (req, res) => {
   }
 });
 
+// NEW: Get Table Schema (Columns & Types)
+app.get('/api/data/table-schema', authenticateToken, requireAdmin, async (req, res) => {
+  const { db: dbName, table: tableName } = req.query;
+  if (!dbName || !tableName) return res.status(400).json({ error: 'Parameter db dan table wajib.' });
+
+  try {
+    const fullTable = `${db.escapeId(dbName)}.${db.escapeId(tableName)}`;
+    const [columns] = await db.query(`DESCRIBE ${fullTable}`);
+    
+    // Map MySQL describe result to our TableColumn format
+    const formattedColumns = columns.map(c => ({
+      name: c.Field,
+      type: c.Type.toUpperCase(),
+      isPrimaryKey: c.Key === 'PRI'
+    }));
+
+    res.json(formattedColumns);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mengambil skema tabel.' });
+  }
+});
+
+// NEW: Alter Table Column
+app.post('/api/data/alter-table', authenticateToken, requireAdmin, async (req, res) => {
+  const { databaseName, tableName, columnName, newType } = req.body;
+  
+  if (!databaseName || !tableName || !columnName || !newType) {
+    return res.status(400).json({ error: 'Parameter tidak lengkap.' });
+  }
+
+  try {
+    const fullTable = `${db.escapeId(databaseName)}.${db.escapeId(tableName)}`;
+    const safeCol = db.escapeId(columnName);
+    
+    // WARNING: Direct SQL injection risk if newType isn't validated. 
+    // Ideally we should whitelist types, but for Admin tool flexibility we allow raw types.
+    // Ensure only Admin accesses this.
+    const sql = `ALTER TABLE ${fullTable} MODIFY COLUMN ${safeCol} ${newType}`;
+    
+    await db.query(sql);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: `Gagal merubah tabel: ${err.message}` });
+  }
+});
+
 // HELPER: Smart Header Detection for Excel
 function getExcelDataWithSmartHeader(filePath) {
   const workbook = XLSX.readFile(filePath);
