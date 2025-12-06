@@ -170,7 +170,7 @@ app.get('/api/data/preview', authenticateToken, async (req, res) => {
     if (search) {
       // Fetch columns to construct LIKE query for each text column
       const [columns] = await db.query(`DESCRIBE ${fullTable}`);
-      // Filter safe columns to search (VARCHAR, TEXT, INT, etc)
+      // Filter safe columns to search (We search all to be flexible)
       const searchableCols = columns.map(c => c.Field);
       
       if (searchableCols.length > 0) {
@@ -363,9 +363,8 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
 
   const fullTable = `${db.escapeId(reqDb)}.${db.escapeId(req.body.tableName)}`;
   const BATCH_SIZE = 1000;
-  let totalRows = 0;
-  // NOTE: In standard INSERT mode, 'changedRows' is usually equal to inserted rows, or 0 if ignored. 
-  // We use inserted rows count here.
+  let totalInserted = 0;
+  let totalProcessed = 0;
 
   const processBatch = async (batchData) => {
     if (batchData.length === 0) return;
@@ -375,15 +374,13 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
     
     const escapedCols = safeCols.map(c => db.escapeId(c));
     
-    // UPDATED: Use INSERT INTO instead of ON DUPLICATE KEY UPDATE.
-    // This effectively "appends" data. 
-    // WARNING: If the table has a Primary Key and the data contains duplicates of that key, this will throw an error.
-    // This is intentional based on user request to "accept all data" (implies user handles schema or wants hard errors on duplicates).
+    // UPDATED: Use INSERT IGNORE INTO
+    // This accepts all data by ignoring duplicates (they won't be inserted, but no error thrown)
+    const sql = `INSERT IGNORE INTO ${fullTable} (${escapedCols.join(', ')}) VALUES ?`;
+    const [result] = await db.query(sql, [values]);
     
-    const sql = `INSERT INTO ${fullTable} (${escapedCols.join(', ')}) VALUES ?`;
-    await db.query(sql, [values]);
-    
-    totalRows += batchData.length;
+    totalInserted += result.affectedRows;
+    totalProcessed += batchData.length;
   };
 
   try {
@@ -405,14 +402,17 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
     }
     
     fs.unlinkSync(req.file.path);
-    // Since we are appending, rowsProcessed equals successful inserts. changes is redundant but kept for frontend compat.
-    res.json({ success: true, rowsProcessed: totalRows, changes: totalRows });
+    
+    // Response: rowsProcessed is total file rows. changes is actual inserts.
+    // This helps user understand if duplicates were skipped.
+    res.json({ success: true, rowsProcessed: totalProcessed, changes: totalInserted });
   
   } catch (err) {
     if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     let msg = err.message;
     if (err.code === 'ER_WARN_DATA_OUT_OF_RANGE') msg = "Data angka terlalu besar. Ubah kolom jadi VARCHAR/BIGINT.";
-    if (err.code === 'ER_DUP_ENTRY') msg = "Gagal: Data duplikat ditemukan pada Primary Key. (Mode sekarang: Insert Only).";
+    // ER_DUP_ENTRY shouldn't happen with INSERT IGNORE, but just in case
+    if (err.code === 'ER_DUP_ENTRY') msg = "Gagal: Data duplikat ditemukan.";
     res.status(500).json({ error: msg });
   }
 });

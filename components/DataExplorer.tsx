@@ -78,7 +78,13 @@ export const DataExplorer: React.FC = () => {
            setSchema(cols);
            // Auto-select first date column if exists
            const dateCol = cols.find(c => c.type.includes('DATE') || c.type.includes('TIME'));
-           if (dateCol) setDateColumn(dateCol.name);
+           if (dateCol) {
+             setDateColumn(dateCol.name);
+             // Default sort by latest date
+             if (!sortConfig) {
+                setSortConfig({ key: dateCol.name, direction: 'desc' });
+             }
+           }
         })
         .catch(console.error);
     }
@@ -261,7 +267,8 @@ export const DataExplorer: React.FC = () => {
                {/* Search Button */}
                <button 
                  onClick={() => setActiveSearch(searchQuery)} 
-                 className="bg-brand-600 hover:bg-brand-700 text-white p-2.5 rounded-xl"
+                 className="bg-brand-600 hover:bg-brand-700 text-white p-2.5 rounded-xl transition-colors"
+                 title="Terapkan Pencarian"
                >
                  <Search className="w-4 h-4" />
                </button>
