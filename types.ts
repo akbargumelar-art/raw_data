@@ -37,3 +37,11 @@ export interface SchemaAnalysis {
   columns: TableColumn[];
   previewData: any[];
 }
+
+export interface TableStats {
+  rows: number;
+  dataLength: number; // in bytes
+  indexLength: number; // in bytes
+  createdAt: string | null;
+  collation: string;
+}

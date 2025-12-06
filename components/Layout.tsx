@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   Activity,
   FilePlus,
-  Menu
+  Table
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -77,6 +77,14 @@ export const Layout: React.FC<LayoutProps> = ({
             <span>Upload Data</span>
           </div>
 
+          <div 
+            onClick={() => !isLocked && onNavigate('explorer')}
+            className={navItemClass('explorer')}
+          >
+            <Table className={`w-5 h-5 ${currentPage === 'explorer' ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+            <span>Lihat Data</span>
+          </div>
+
           {user.role === UserRole.ADMIN && (
             <>
               <div className="px-4 py-3 mt-6 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
@@ -125,11 +133,13 @@ export const Layout: React.FC<LayoutProps> = ({
             <h2 className="text-xl font-bold text-gray-900">
               {currentPage === 'dashboard' ? 'Upload Data' : 
                currentPage === 'schema' ? 'Desain Database' :
+               currentPage === 'explorer' ? 'Data Explorer' :
                'Pengguna Sistem'}
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
               {currentPage === 'dashboard' ? 'Proses upload batch & input data' : 
                currentPage === 'schema' ? 'Buat dan atur tabel database' :
+               currentPage === 'explorer' ? 'Lihat dan monitoring data tabel' :
                'Atur akses dan peran pengguna'}
             </p>
           </div>

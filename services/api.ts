@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { API_URL, LOCAL_STORAGE_KEY, USE_MOCK_API } from '../constants';
-import { AuthResponse, User, UserRole, SchemaAnalysis, TableColumn } from '../types';
+import { AuthResponse, User, UserRole, SchemaAnalysis, TableColumn, TableStats } from '../types';
 import { mockAuthService, mockDataService, mockAdminService } from './mockApi';
 
 const api = axios.create({
@@ -60,6 +60,20 @@ export const dataService = {
   alterTableColumn: async (dbName: string, tableName: string, columnName: string, newType: string): Promise<void> => {
     if (USE_MOCK_API) return;
     await api.post('/data/alter-table', { databaseName: dbName, tableName, columnName, newType });
+  },
+
+  // NEW: Get Table Summary Stats
+  getTableStats: async (dbName: string, tableName: string): Promise<TableStats> => {
+    if (USE_MOCK_API) return { rows: 0, dataLength: 0, indexLength: 0, createdAt: null, collation: '' };
+    const response = await api.get(`/data/table-stats?db=${dbName}&table=${tableName}`);
+    return response.data;
+  },
+
+  // NEW: Get Actual Data (Paginated)
+  getTableData: async (dbName: string, tableName: string, page: number = 1, limit: number = 20): Promise<{data: any[], total: number}> => {
+    if (USE_MOCK_API) return { data: [], total: 0 };
+    const response = await api.get(`/data/preview?db=${dbName}&table=${tableName}&page=${page}&limit=${limit}`);
+    return response.data;
   },
 
   analyzeFile: async (file: File): Promise<SchemaAnalysis> => {

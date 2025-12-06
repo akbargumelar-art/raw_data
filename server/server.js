@@ -184,6 +184,66 @@ app.get('/api/data/tables', authenticateToken, async (req, res) => {
   }
 });
 
+// NEW: Get Table Stats
+app.get('/api/data/table-stats', authenticateToken, async (req, res) => {
+  const { db: dbName, table: tableName } = req.query;
+  if (!dbName || !tableName) return res.status(400).json({ error: 'Parameter db dan table wajib.' });
+
+  try {
+    // Check permission
+    const { role, allowed } = await getUserAllowedDatabases(req.user.id);
+    if (role !== 'admin' && !allowed.includes(dbName)) {
+      return res.status(403).json({ error: 'Akses ditolak.' });
+    }
+
+    // Use SHOW TABLE STATUS to get metadata
+    const [rows] = await db.query(`SHOW TABLE STATUS FROM ${db.escapeId(dbName)} LIKE ?`, [tableName]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Tabel tidak ditemukan' });
+
+    const status = rows[0];
+    
+    // For exact Row Count, we use SELECT COUNT(*) as InnoDB estimate can be wrong
+    const fullTable = `${db.escapeId(dbName)}.${db.escapeId(tableName)}`;
+    const [countRows] = await db.query(`SELECT COUNT(*) as total FROM ${fullTable}`);
+    
+    res.json({
+      rows: countRows[0].total,
+      dataLength: status.Data_length,
+      indexLength: status.Index_length,
+      createdAt: status.Create_time,
+      collation: status.Collation
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat statistik tabel.' });
+  }
+});
+
+// NEW: Data Preview (Paginated)
+app.get('/api/data/preview', authenticateToken, async (req, res) => {
+  const { db: dbName, table: tableName, page = 1, limit = 20 } = req.query;
+  if (!dbName || !tableName) return res.status(400).json({ error: 'Parameter tidak lengkap.' });
+
+  try {
+     // Check permission
+    const { role, allowed } = await getUserAllowedDatabases(req.user.id);
+    if (role !== 'admin' && !allowed.includes(dbName)) {
+      return res.status(403).json({ error: 'Akses ditolak.' });
+    }
+
+    const fullTable = `${db.escapeId(dbName)}.${db.escapeId(tableName)}`;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const limitVal = parseInt(limit);
+
+    const [rows] = await db.query(`SELECT * FROM ${fullTable} LIMIT ? OFFSET ?`, [limitVal, offset]);
+    
+    res.json({ data: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat data.' });
+  }
+});
+
 // NEW: Get Table Schema (Columns & Types)
 app.get('/api/data/table-schema', authenticateToken, requireAdmin, async (req, res) => {
   const { db: dbName, table: tableName } = req.query;

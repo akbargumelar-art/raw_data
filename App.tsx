@@ -6,6 +6,7 @@ import { Layout } from './components/Layout';
 import { Upload } from './components/Upload';
 import { UserManagement } from './components/UserManagement';
 import { SchemaBuilder } from './components/SchemaBuilder';
+import { DataExplorer } from './components/DataExplorer';
 import { LOCAL_STORAGE_KEY } from './constants';
 
 const App: React.FC = () => {
@@ -20,7 +21,7 @@ const App: React.FC = () => {
       if (token) {
         try {
           const userData = await authService.verify();
-          handleLogin(userData); // Reuse logic to set correct initial page
+          handleLogin(userData); 
         } catch (e) {
           localStorage.removeItem(LOCAL_STORAGE_KEY);
           setUser(null);
@@ -33,7 +34,6 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setUser(user);
-    // Redirect logic: Admin goes to Schema (Builder), Operator goes to Dashboard (Upload)
     if (user.role === UserRole.ADMIN) {
       setCurrentPage('schema');
     } else {
@@ -80,6 +80,8 @@ const App: React.FC = () => {
 
       {currentPage === 'dashboard' && <Upload setIsLocked={setIsLocked} />}
       
+      {currentPage === 'explorer' && <DataExplorer />}
+
       {currentPage === 'users' && user.role === UserRole.ADMIN && <UserManagement />}
       {currentPage === 'users' && user.role !== UserRole.ADMIN && (
         <div className="flex flex-col items-center justify-center h-[50vh] text-center">
