@@ -7,12 +7,13 @@ const pool = mysql.createPool({
   host: process.env.DB_HOST || 'agrabudi.com',
   user: process.env.DB_USER || 'akbar',
   password: process.env.DB_PASS || 'Ciraya@555',
-  // Defaulting DB_NAME to 'db_raw' as requested
   database: process.env.DB_NAME || 'db_raw', 
   port: parseInt(process.env.DB_PORT || '52306'),
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  supportBigNumbers: true, // Required for COUNT(*) and BIGINT columns
+  bigNumberStrings: true   // Return BIGINT as string to prevent JSON crashes
 });
 
 const promisePool = pool.promise();

@@ -206,20 +206,20 @@ app.post('/api/data/query', authenticateToken, requireAdmin, async (req, res) =>
   const { databaseName, query } = req.body;
   if (!databaseName || !query) return res.status(400).json({ error: 'Database dan Query wajib diisi.' });
 
-  // Safety Check: Prevent accessing MySQL system tables (basic protection)
   if (query.toLowerCase().includes('information_schema') || query.toLowerCase().includes('mysql.')) {
     return res.status(403).json({ error: 'Query ke tabel sistem dilarang demi keamanan.' });
   }
 
   try {
-    // Select DB Context
     await db.query(`USE ${db.escapeId(databaseName)}`);
-    
-    // Run Query
     const [results] = await db.query(query);
     
-    // Return array if it's a SELECT, otherwise info
-    res.json(results);
+    // Explicitly handle BigInt serialization using replacer
+    const safeResults = JSON.parse(JSON.stringify(results, (key, value) =>
+        typeof value === 'bigint' ? value.toString() : value
+    ));
+    
+    res.json(safeResults);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
