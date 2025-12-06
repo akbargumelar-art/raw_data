@@ -379,7 +379,13 @@ app.post('/api/data/create-table', authenticateToken, requireAdmin, async (req, 
   const { databaseName, tableName, columns } = req.body;
   
   // 1. Define Columns
-  const colDefs = columns.map(c => `${db.escapeId(c.name)} ${c.type} ${c.type.includes('VARCHAR') || c.type === 'TEXT' ? 'NULL' : 'NOT NULL'}`);
+  const colDefs = columns.map(c => {
+    // FIX: Primary Key columns MUST be NOT NULL in MySQL.
+    // For non-PK columns, we default to NULL to allow flexible data import (empty cells).
+    // Previous logic caused "All parts of a PRIMARY KEY must be NOT NULL" error for VARCHAR PKs.
+    const isNullable = !c.isPrimaryKey; 
+    return `${db.escapeId(c.name)} ${c.type} ${isNullable ? 'NULL' : 'NOT NULL'}`;
+  });
   
   // 2. Define Primary Key (Composite)
   const primaryKeys = columns.filter(c => c.isPrimaryKey).map(c => db.escapeId(c.name));
