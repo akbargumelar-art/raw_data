@@ -1,7 +1,8 @@
+import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
+import db from '../server/db.js';
 
-require('dotenv').config();
-const bcrypt = require('bcryptjs');
-const db = require('../server/db');
+dotenv.config();
 
 const seedUsers = async () => {
   console.log("🌱 Starting User Seeding...");

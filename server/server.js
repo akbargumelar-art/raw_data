@@ -1,21 +1,31 @@
+import dotenv from 'dotenv';
+import express from 'express';
+import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
+import csv from 'csv-parser';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import { fileURLToPath } from 'url';
+import db from './db.js'; // Note the .js extension is required in ESM
 
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
-const multer = require('multer');
-const csv = require('csv-parser');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const db = require('./db');
+dotenv.config();
+
+// Reconstruct __dirname for ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
 // Middleware
-app.use(cors()); // Allow all CORS for development ease
+app.use(cors()); 
 app.use(express.json());
+
+// SERVE STATIC FILES (React Frontend)
+// This is critical for Nginx/VPS deployment to avoid 502/Blank pages
+app.use(express.static(path.join(__dirname, '../dist')));
 
 const SECRET_KEY = process.env.JWT_SECRET || 'super_secret_key_123';
 
@@ -46,7 +56,6 @@ const requireAdmin = (req, res, next) => {
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
-    // Ensure we are checking the users table
     const [users] = await db.query('SELECT * FROM users WHERE username = ?', [username]);
     if (users.length === 0) return res.status(401).json({ error: 'User not found' });
     
@@ -93,7 +102,6 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
 app.get('/api/data/databases', authenticateToken, async (req, res) => {
   try {
     const [rows] = await db.query('SHOW DATABASES');
-    // Filter out system schemas usually not needed
     const systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys'];
     const databases = rows
       .map(r => Object.values(r)[0])
@@ -110,7 +118,6 @@ app.get('/api/data/tables', authenticateToken, async (req, res) => {
   if (!dbName) return res.status(400).json({ error: 'Database parameter required' });
 
   try {
-    // Use the specific database to show tables
     const [rows] = await db.query(`SHOW TABLES FROM ${db.escapeId(dbName)}`);
     const tables = rows.map(r => Object.values(r)[0]);
     res.json({ tables });
@@ -135,7 +142,6 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
       if (results.length < maxPreview) {
         results.push(data);
       } else {
-        // Destroy stream after we have enough preview data
         stream.destroy(); 
       }
     })
@@ -143,7 +149,6 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
        finishAnalysis();
     })
     .on('error', (err) => {
-       // 'close' might be called after destroy, handling error just in case
        if(!headers) res.status(500).json({error: 'Failed to parse CSV'});
     })
     .on('end', () => {
@@ -151,13 +156,11 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
     });
 
   function finishAnalysis() {
-    // Infer types
     const columns = headers.map(header => {
       let isInt = true;
       let isFloat = true;
       let isDate = true;
       
-      // Check first few rows to guess type
       for (const row of results) {
         const val = row[header];
         if (!val) continue;
@@ -175,7 +178,6 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
       else if (isFloat) type = 'DECIMAL(10,2)';
       else if (isDate) type = 'DATE';
 
-      // Default ID or SKU to primary key guess
       const isPrimaryKey = /id|sku|code/i.test(header);
 
       return { name: header.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase(), type, isPrimaryKey };
@@ -231,7 +233,6 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
   const processBatch = async (batchData) => {
     if (batchData.length === 0) return;
     
-    // Construct dynamic upsert query
     const cols = Object.keys(batchData[0]);
     const values = batchData.map(row => cols.map(c => row[c]));
     
@@ -247,7 +248,6 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
   const stream = fs.createReadStream(filePath)
     .pipe(csv());
 
-  // Wrap stream processing in a promise
   const streamPromise = new Promise((resolve, reject) => {
     stream.on('data', async (data) => {
       if (!headers) headers = Object.keys(data);
@@ -269,7 +269,7 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
     stream.on('end', async () => {
       try {
         if (rows.length > 0) await processBatch(rows);
-        fs.unlinkSync(filePath); // Cleanup
+        fs.unlinkSync(filePath);
         resolve();
       } catch (err) {
         reject(err);
@@ -291,10 +291,9 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
   }
 });
 
-// Seed default admin if not exists (Robust Version)
+// Seed default admin
 const seedAdmin = async () => {
   try {
-    // 1. Ensure Users Table Exists
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
@@ -306,7 +305,6 @@ const seedAdmin = async () => {
     `;
     await db.query(createTableQuery);
 
-    // 2. Check if admin exists
     const [users] = await db.query("SELECT * FROM users WHERE role='admin'");
     if (users.length === 0) {
       const hashed = await bcrypt.hash('admin123', 10);
@@ -317,12 +315,19 @@ const seedAdmin = async () => {
     }
   } catch (e) {
     console.error("❌ DB Initialization Failed:", e.message);
-    console.error("   Ensure the database defined in server/db.js exists on the remote host.");
   }
 };
 
+// Catch-all route to serve React App for any unknown path
+// This fixes the "Blank Page" issue on refresh
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
+
 const PORT = process.env.APP_PORT || 6002;
-app.listen(PORT, async () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+
+// Listen on 0.0.0.0 to ensure external access via Nginx Proxy
+app.listen(PORT, '0.0.0.0', async () => {
+  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   await seedAdmin();
 });
