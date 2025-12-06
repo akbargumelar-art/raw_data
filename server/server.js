@@ -145,6 +145,34 @@ app.get('/api/data/tables', authenticateToken, async (req, res) => {
   }
 });
 
+// HELPER: Smart Header Detection for Excel
+function getExcelDataWithSmartHeader(filePath) {
+  const workbook = XLSX.readFile(filePath);
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+  
+  if (rawData.length === 0) throw new Error("Empty file");
+
+  let maxCols = 0;
+  let headerRowIndex = 0;
+  const limit = Math.min(rawData.length, 15); // Scan first 15 rows
+
+  for (let i = 0; i < limit; i++) {
+    const row = rawData[i];
+    if (Array.isArray(row)) {
+      const nonEmptyCount = row.filter(cell => cell !== '' && cell !== null && cell !== undefined).length;
+      if (nonEmptyCount > maxCols) {
+        maxCols = nonEmptyCount;
+        headerRowIndex = i;
+      }
+    }
+  }
+
+  // Get data starting from smart header
+  return XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex });
+}
+
 // SCHEMA BUILDER: Analyze File (Smart Header Detection)
 app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'File required' });
@@ -153,33 +181,11 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
   
   if (ext === '.xlsx' || ext === '.xls') {
     try {
-      const workbook = XLSX.readFile(req.file.path);
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-      
-      if (rawData.length === 0) throw new Error("Empty file");
-
-      let maxCols = 0;
-      let headerRowIndex = 0;
-      const limit = Math.min(rawData.length, 10);
-
-      for (let i = 0; i < limit; i++) {
-        const row = rawData[i];
-        if (Array.isArray(row)) {
-          const nonEmptyCount = row.filter(cell => cell !== '' && cell !== null && cell !== undefined).length;
-          if (nonEmptyCount > maxCols) {
-            maxCols = nonEmptyCount;
-            headerRowIndex = i;
-          }
-        }
-      }
-
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex });
+      const jsonData = getExcelDataWithSmartHeader(req.file.path);
       if (jsonData.length === 0) throw new Error("No data found after header");
+      
       const headers = Object.keys(jsonData[0]);
       const previewData = jsonData.slice(0, 5);
-
       analyzeAndResponse(headers, previewData, res, req.file.path);
 
     } catch (err) {
@@ -277,6 +283,7 @@ app.post('/api/data/create-table', authenticateToken, async (req, res) => {
   }
 });
 
+// DATA UPLOAD: Supports CSV & Excel
 app.post('/api/data/upload', authenticateToken, upload.single('file'), async (req, res) => {
   if (!req.file || !req.body.tableName || !req.body.databaseName) {
     return res.status(400).json({ error: 'File, Database, and Table Name required' });
@@ -288,61 +295,97 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
   const fullTableName = `${databaseName}.${tableName}`;
 
   const BATCH_SIZE = 1000;
-  let rows = [];
   let totalProcessed = 0;
-  let headers = null;
 
   const processBatch = async (batchData) => {
     if (batchData.length === 0) return;
     const cols = Object.keys(batchData[0]);
+    
+    // Normalize keys to match safe column names
+    const safeCols = cols.map(c => c.trim().replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase());
+    
     const values = batchData.map(row => cols.map(c => row[c]));
-    const escapedCols = cols.map(c => db.escapeId(c));
+    
+    const escapedCols = safeCols.map(c => db.escapeId(c));
     const updateClause = escapedCols.map(c => `${c}=VALUES(${c})`).join(', ');
+    
     const sql = `INSERT INTO ${fullTableName} (${escapedCols.join(', ')}) VALUES ? ON DUPLICATE KEY UPDATE ${updateClause}`;
     await db.query(sql, [values]);
     totalProcessed += batchData.length;
   };
 
-  const stream = fs.createReadStream(filePath)
-    .pipe(csv());
+  const ext = path.extname(req.file.originalname).toLowerCase();
 
-  const streamPromise = new Promise((resolve, reject) => {
-    stream.on('data', async (data) => {
-      if (!headers) headers = Object.keys(data);
-      rows.push(data);
-      if (rows.length >= BATCH_SIZE) {
-        stream.pause();
+  // --- EXCEL HANDLING ---
+  if (ext === '.xlsx' || ext === '.xls') {
+     try {
+       const jsonData = getExcelDataWithSmartHeader(filePath);
+       
+       // Process in chunks to avoid memory spike
+       for (let i = 0; i < jsonData.length; i += BATCH_SIZE) {
+         const batch = jsonData.slice(i, i + BATCH_SIZE);
+         await processBatch(batch);
+       }
+       
+       fs.unlinkSync(filePath);
+       res.json({ success: true, rowsProcessed: totalProcessed });
+
+     } catch (err) {
+       console.error("Excel Upload Error:", err);
+       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+       res.status(500).json({ 
+         error: err.code === 'ER_NO_SUCH_TABLE' 
+           ? `Table ${fullTableName} does not exist.` 
+           : `Excel Error: ${err.message}` 
+       });
+     }
+
+  // --- CSV HANDLING ---
+  } else {
+    let rows = [];
+    let headers = null;
+
+    const stream = fs.createReadStream(filePath)
+      .pipe(csv());
+
+    const streamPromise = new Promise((resolve, reject) => {
+      stream.on('data', async (data) => {
+        if (!headers) headers = Object.keys(data);
+        rows.push(data);
+        if (rows.length >= BATCH_SIZE) {
+          stream.pause();
+          try {
+            await processBatch(rows);
+            rows = [];
+            stream.resume();
+          } catch (err) {
+            stream.destroy();
+            reject(err);
+          }
+        }
+      });
+      stream.on('end', async () => {
         try {
-          await processBatch(rows);
-          rows = [];
-          stream.resume();
+          if (rows.length > 0) await processBatch(rows);
+          fs.unlinkSync(filePath);
+          resolve();
         } catch (err) {
-          stream.destroy();
           reject(err);
         }
-      }
-    });
-    stream.on('end', async () => {
-      try {
-        if (rows.length > 0) await processBatch(rows);
-        fs.unlinkSync(filePath);
-        resolve();
-      } catch (err) {
+      });
+      stream.on('error', (err) => {
         reject(err);
-      }
+      });
     });
-    stream.on('error', (err) => {
-      reject(err);
-    });
-  });
 
-  try {
-    await streamPromise;
-    res.json({ success: true, rowsProcessed: totalProcessed });
-  } catch (err) {
-    console.error("Upload processing failed:", err);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    res.status(500).json({ error: err.code === 'ER_NO_SUCH_TABLE' ? `Table ${fullTableName} does not exist` : 'Format error or DB connection lost' });
+    try {
+      await streamPromise;
+      res.json({ success: true, rowsProcessed: totalProcessed });
+    } catch (err) {
+      console.error("CSV Upload processing failed:", err);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      res.status(500).json({ error: err.code === 'ER_NO_SUCH_TABLE' ? `Table ${fullTableName} does not exist` : 'Format error or DB connection lost' });
+    }
   }
 });
 
