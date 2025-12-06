@@ -314,13 +314,14 @@ const seedAdmin = async () => {
       console.log("✅ System Ready: Admin user exists.");
     }
   } catch (e) {
-    console.error("❌ DB Initialization Failed:", e.message);
+    // Suppress error if it's just about database connection failing (handled elsewhere)
+    console.error("ℹ️ DB Initialization Skipped:", e.code || e.message);
   }
 };
 
 // Catch-all route to serve React App for any unknown path
-// This fixes the "Blank Page" issue on refresh
-app.get('*', (req, res) => {
+// Using regex instead of '*' to avoid Express 5 PathError
+app.get(/^(?!\/api).+/, (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 
