@@ -168,15 +168,12 @@ app.get('/api/data/preview', authenticateToken, async (req, res) => {
 
     // --- SEARCH LOGIC ---
     if (search) {
-      // Fetch columns to construct LIKE query for each text column
       const [columns] = await db.query(`DESCRIBE ${fullTable}`);
-      // Filter safe columns to search (We search all to be flexible)
       const searchableCols = columns.map(c => c.Field);
       
       if (searchableCols.length > 0) {
         const searchConditions = searchableCols.map(col => `${db.escapeId(col)} LIKE ?`).join(' OR ');
         whereClauses.push(`(${searchConditions})`);
-        // Add search term for each column
         searchableCols.forEach(() => params.push(`%${search}%`));
       }
     }
@@ -196,6 +193,13 @@ app.get('/api/data/preview', authenticateToken, async (req, res) => {
       const safeSort = db.escapeId(sort);
       const direction = dir === 'desc' ? 'DESC' : 'ASC';
       sql += ` ORDER BY ${safeSort} ${direction}`;
+    } else {
+       // Default Sort: If 'updated_at' or 'created_at' exists, use it.
+       const [cols] = await db.query(`DESCRIBE ${fullTable}`);
+       const dateCol = cols.find(c => c.Field === 'updated_at' || c.Field === 'created_at' || c.Type.includes('datetime'));
+       if (dateCol) {
+          sql += ` ORDER BY ${db.escapeId(dateCol.Field)} DESC`;
+       }
     }
     
     // Pagination
@@ -236,6 +240,34 @@ app.get('/api/data/export', authenticateToken, async (req, res) => {
   }
 });
 
+// NEW: Download Template Excel
+app.get('/api/data/template', authenticateToken, async (req, res) => {
+  const { db: dbName, table: tableName } = req.query;
+  
+  try {
+    const { role, allowed } = await getUserAllowedDatabases(req.user.id);
+    if (role !== 'admin' && !allowed.includes(dbName)) return res.status(403).json({ error: 'Akses ditolak.' });
+
+    // Get Table Schema to know columns
+    const [columns] = await db.query(`DESCRIBE ${db.escapeId(dbName)}.${db.escapeId(tableName)}`);
+    const headers = columns.map(c => c.Field);
+
+    // Create a worksheet with only headers
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers]); // Array of Arrays
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Disposition', `attachment; filename="TEMPLATE_${tableName}.xlsx"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buffer);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Template Generation Failed");
+  }
+});
+
 // NEW: Raw SQL Query Runner
 app.post('/api/data/query', authenticateToken, requireAdmin, async (req, res) => {
   const { databaseName, query } = req.body;
@@ -263,6 +295,18 @@ app.post('/api/data/query', authenticateToken, requireAdmin, async (req, res) =>
 app.get('/api/data/table-schema', authenticateToken, requireAdmin, async (req, res) => {
   const { db: dbName, table: tableName } = req.query;
   try {
+    const [columns] = await db.query(`DESCRIBE ${db.escapeId(dbName)}.${db.escapeId(tableName)}`);
+    res.json(columns.map(c => ({ name: c.Field, type: c.Type.toUpperCase(), isPrimaryKey: c.Key === 'PRI' })));
+  } catch (err) { res.status(500).json({ error: 'Gagal.' }); }
+});
+
+// Allow getting schema for standard users (Upload Page needs this for template/validation)
+app.get('/api/data/table-schema-public', authenticateToken, async (req, res) => {
+  const { db: dbName, table: tableName } = req.query;
+  try {
+     const { role, allowed } = await getUserAllowedDatabases(req.user.id);
+     if (role !== 'admin' && !allowed.includes(dbName)) return res.status(403).json({ error: 'Akses ditolak.' });
+
     const [columns] = await db.query(`DESCRIBE ${db.escapeId(dbName)}.${db.escapeId(tableName)}`);
     res.json(columns.map(c => ({ name: c.Field, type: c.Type.toUpperCase(), isPrimaryKey: c.Key === 'PRI' })));
   } catch (err) { res.status(500).json({ error: 'Gagal.' }); }
@@ -355,6 +399,9 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
   const reqDb = req.body.databaseName;
   if (!req.file || !reqDb) return res.status(400).json({ error: 'Data kurang.' });
 
+  // CRITICAL: Disable timeout for large file uploads (millions of rows can take minutes)
+  req.setTimeout(0); 
+
   const { role, allowed } = await getUserAllowedDatabases(req.user.id);
   if (role !== 'admin' && !allowed.includes(reqDb)) {
     if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
@@ -362,7 +409,7 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
   }
 
   const fullTable = `${db.escapeId(reqDb)}.${db.escapeId(req.body.tableName)}`;
-  const BATCH_SIZE = 1000;
+  const BATCH_SIZE = 5000; // Increased batch size for performance
   let totalInserted = 0;
   let totalProcessed = 0;
 
@@ -403,8 +450,8 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
     
     fs.unlinkSync(req.file.path);
     
-    // Response: rowsProcessed is total file rows. changes is actual inserts.
-    // This helps user understand if duplicates were skipped.
+    // Response: rowsProcessed is total file rows. changes is actual inserts (affectedRows).
+    // With INSERT IGNORE, duplicates return 0 affectedRows.
     res.json({ success: true, rowsProcessed: totalProcessed, changes: totalInserted });
   
   } catch (err) {

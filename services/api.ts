@@ -55,6 +55,13 @@ export const dataService = {
     return response.data;
   },
 
+  // NEW: Public schema fetcher (for Upload page)
+  getTableSchemaPublic: async (dbName: string, tableName: string): Promise<TableColumn[]> => {
+    if (USE_MOCK_API) return []; 
+    const response = await api.get(`/data/table-schema-public?db=${dbName}&table=${tableName}`);
+    return response.data;
+  },
+
   alterTableColumn: async (dbName: string, tableName: string, columnName: string, newType: string): Promise<void> => {
     if (USE_MOCK_API) return;
     await api.post('/data/alter-table', { databaseName: dbName, tableName, columnName, newType });
@@ -110,6 +117,22 @@ export const dataService = {
     link.remove();
   },
 
+  // NEW: Download Template
+  downloadTemplate: async (dbName: string, tableName: string) => {
+    if (USE_MOCK_API) return;
+    const response = await api.get(`/data/template?db=${dbName}&table=${tableName}`, {
+      responseType: 'blob'
+    });
+    
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `TEMPLATE_${tableName}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
   // NEW: Run Raw SQL Query
   runQuery: async (databaseName: string, query: string): Promise<any[]> => {
     if (USE_MOCK_API) return [];
@@ -149,7 +172,8 @@ export const dataService = {
     const response = await api.post('/data/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress,
-      timeout: 600000 
+      // CRITICAL: Disable timeout for large files (0 = no timeout)
+      timeout: 0 
     });
     return response.data;
   }
