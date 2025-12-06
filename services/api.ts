@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { API_URL, LOCAL_STORAGE_KEY, USE_MOCK_API } from '../constants';
 import { AuthResponse, User, UserRole, SchemaAnalysis, TableColumn } from '../types';
@@ -94,9 +95,9 @@ export const adminService = {
     return response.data;
   },
 
-  createUser: async (username: string, password: string, role: UserRole) => {
+  createUser: async (username: string, password: string, role: UserRole, allowedDatabases: string[] = []) => {
     if (USE_MOCK_API) return mockAdminService.createUser(username, password, role);
-    const response = await api.post('/admin/users', { username, password, role });
+    const response = await api.post('/admin/users', { username, password, role, allowedDatabases });
     return response.data;
   },
 

@@ -1,3 +1,4 @@
+
 import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
@@ -81,15 +82,25 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 
 // --- Admin Routes ---
 app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-  const [users] = await db.query('SELECT id, username, role FROM users');
-  res.json(users);
+  const [users] = await db.query('SELECT id, username, role, allowed_databases FROM users');
+  const formattedUsers = users.map(u => ({
+    ...u,
+    allowedDatabases: u.allowed_databases ? JSON.parse(u.allowed_databases) : []
+  }));
+  res.json(formattedUsers);
 });
 
 app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-  const { username, password, role } = req.body;
+  const { username, password, role, allowedDatabases } = req.body;
   try {
     const hashed = await bcrypt.hash(password, 10);
-    await db.query('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', [username, hashed, role]);
+    // Store allowed databases as JSON string
+    const allowedDbString = allowedDatabases ? JSON.stringify(allowedDatabases) : '[]';
+    
+    await db.query(
+      'INSERT INTO users (username, password, role, allowed_databases) VALUES (?, ?, ?, ?)', 
+      [username, hashed, role, allowedDbString]
+    );
     res.json({ success: true });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'Username taken' });
@@ -103,21 +114,44 @@ app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, 
 });
 
 // --- Data Routes ---
+
+// Helper: Get User's Allowed DBs
+const getUserAllowedDatabases = async (userId) => {
+  const [rows] = await db.query('SELECT role, allowed_databases FROM users WHERE id = ?', [userId]);
+  if (rows.length === 0) return { role: 'operator', allowed: [] };
+  
+  const user = rows[0];
+  const allowed = user.allowed_databases ? JSON.parse(user.allowed_databases) : [];
+  return { role: user.role, allowed };
+};
+
 app.get('/api/data/databases', authenticateToken, async (req, res) => {
   try {
     const [rows] = await db.query('SHOW DATABASES');
     const systemDbs = ['information_schema', 'mysql', 'performance_schema', 'sys'];
-    const databases = rows
+    const allDatabases = rows
       .map(r => Object.values(r)[0])
       .filter(d => !systemDbs.includes(d));
-    res.json({ databases });
+
+    // Filter based on user permissions
+    const { role, allowed } = await getUserAllowedDatabases(req.user.id);
+    
+    if (role === 'admin') {
+      // Admin sees everything
+      res.json({ databases: allDatabases });
+    } else {
+      // Operator only sees allowed databases
+      // Also filter out any DBs that might have been deleted from server but still in user permission
+      const userDbs = allDatabases.filter(db => allowed.includes(db));
+      res.json({ databases: userDbs });
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to list databases' });
   }
 });
 
-app.post('/api/data/create-database', authenticateToken, async (req, res) => {
+app.post('/api/data/create-database', authenticateToken, requireAdmin, async (req, res) => {
   const { databaseName } = req.body;
   if (!databaseName) return res.status(400).json({ error: 'Database name required' });
   const safeName = databaseName.replace(/[^a-zA-Z0-9_]/g, '');
@@ -134,6 +168,12 @@ app.post('/api/data/create-database', authenticateToken, async (req, res) => {
 app.get('/api/data/tables', authenticateToken, async (req, res) => {
   const dbName = req.query.db;
   if (!dbName) return res.status(400).json({ error: 'Database parameter required' });
+
+  // Security Check
+  const { role, allowed } = await getUserAllowedDatabases(req.user.id);
+  if (role !== 'admin' && !allowed.includes(dbName)) {
+    return res.status(403).json({ error: 'Access to this database is denied' });
+  }
 
   try {
     const [rows] = await db.query(`SHOW TABLES FROM ${db.escapeId(dbName)}`);
@@ -258,7 +298,7 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
   }
 });
 
-app.post('/api/data/create-table', authenticateToken, async (req, res) => {
+app.post('/api/data/create-table', authenticateToken, requireAdmin, async (req, res) => {
   const { databaseName, tableName, columns } = req.body;
   if (!databaseName || !tableName || !columns) {
     return res.status(400).json({ error: 'Missing parameters' });
@@ -285,12 +325,20 @@ app.post('/api/data/create-table', authenticateToken, async (req, res) => {
 
 // DATA UPLOAD: Supports CSV & Excel
 app.post('/api/data/upload', authenticateToken, upload.single('file'), async (req, res) => {
-  if (!req.file || !req.body.tableName || !req.body.databaseName) {
+  const reqDb = req.body.databaseName;
+  if (!req.file || !req.body.tableName || !reqDb) {
     return res.status(400).json({ error: 'File, Database, and Table Name required' });
   }
 
+  // Security Check: Verify User Permission for this DB
+  const { role, allowed } = await getUserAllowedDatabases(req.user.id);
+  if (role !== 'admin' && !allowed.includes(reqDb)) {
+    if (req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    return res.status(403).json({ error: 'You do not have permission to upload to this database.' });
+  }
+
   const filePath = req.file.path;
-  const databaseName = db.escapeId(req.body.databaseName);
+  const databaseName = db.escapeId(reqDb);
   const tableName = db.escapeId(req.body.tableName);
   const fullTableName = `${databaseName}.${tableName}`;
 
@@ -397,10 +445,19 @@ const seedAdmin = async () => {
         username VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         role ENUM('admin', 'operator') NOT NULL DEFAULT 'operator',
+        allowed_databases TEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `;
     await db.query(createTableQuery);
+    
+    // Auto-migrate: Add allowed_databases column if missing for existing installs
+    try {
+      await db.query("SELECT allowed_databases FROM users LIMIT 1");
+    } catch (e) {
+      console.log("ℹ️ Migrating DB: Adding allowed_databases column...");
+      await db.query("ALTER TABLE users ADD COLUMN allowed_databases TEXT NULL");
+    }
 
     const [users] = await db.query("SELECT * FROM users WHERE role='admin'");
     if (users.length === 0) {

@@ -1,35 +1,49 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
-import { adminService } from '../services/api';
-import { Trash2, UserPlus, Shield, User as UserIcon } from 'lucide-react';
+import { adminService, dataService } from '../services/api';
+import { Trash2, UserPlus, Shield, User as UserIcon, Database, CheckSquare, Square } from 'lucide-react';
 
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
-  const [newUser, setNewUser] = useState({ username: '', password: '', role: UserRole.OPERATOR });
+  const [availableDbs, setAvailableDbs] = useState<string[]>([]);
+  
+  const [newUser, setNewUser] = useState({ 
+    username: '', 
+    password: '', 
+    role: UserRole.OPERATOR 
+  });
+  const [selectedDbs, setSelectedDbs] = useState<string[]>([]);
+
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const loadUsers = async () => {
+  const loadData = async () => {
     try {
-      const data = await adminService.getUsers();
-      setUsers(data);
+      const [uData, dData] = await Promise.all([
+        adminService.getUsers(),
+        dataService.getDatabases()
+      ]);
+      setUsers(uData);
+      setAvailableDbs(dData);
     } catch (e) {
       console.error(e);
     }
   };
 
   useEffect(() => {
-    loadUsers();
+    loadData();
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await adminService.createUser(newUser.username, newUser.password, newUser.role);
+      await adminService.createUser(newUser.username, newUser.password, newUser.role, selectedDbs);
       setMsg('User created successfully');
       setNewUser({ username: '', password: '', role: UserRole.OPERATOR });
-      loadUsers();
+      setSelectedDbs([]);
+      loadData(); // Refresh list
       setTimeout(() => setMsg(''), 3000);
     } catch (error: any) {
       setMsg(error.response?.data?.error || 'Failed to create user');
@@ -42,9 +56,17 @@ export const UserManagement: React.FC = () => {
     if(!window.confirm('Are you sure you want to delete this user?')) return;
     try {
       await adminService.deleteUser(id);
-      loadUsers();
+      loadData();
     } catch (e) {
       alert('Failed to delete');
+    }
+  };
+
+  const toggleDbSelection = (db: string) => {
+    if (selectedDbs.includes(db)) {
+      setSelectedDbs(selectedDbs.filter(d => d !== db));
+    } else {
+      setSelectedDbs([...selectedDbs, db]);
     }
   };
 
@@ -63,16 +85,15 @@ export const UserManagement: React.FC = () => {
           <table className="w-full text-left">
             <thead className="bg-white text-gray-400 text-[10px] uppercase font-bold tracking-wider border-b border-gray-100">
               <tr>
-                <th className="px-6 py-4">ID</th>
                 <th className="px-6 py-4">Username</th>
                 <th className="px-6 py-4">Role</th>
+                <th className="px-6 py-4">Access Rights</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {users.map(u => (
                 <tr key={u.id} className="hover:bg-gray-50 transition-colors group">
-                  <td className="px-6 py-4 text-gray-300 font-mono text-xs group-hover:text-gray-500">#{u.id}</td>
                   <td className="px-6 py-4 font-medium text-gray-700 flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-500 text-xs font-bold border border-white shadow-sm">
                       {u.username.charAt(0).toUpperCase()}
@@ -88,6 +109,23 @@ export const UserManagement: React.FC = () => {
                       {u.role === UserRole.ADMIN ? <Shield className="w-3 h-3"/> : <UserIcon className="w-3 h-3"/>}
                       {u.role.toUpperCase()}
                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                     {u.role === UserRole.ADMIN ? (
+                       <span className="text-xs text-gray-400 italic">Full System Access</span>
+                     ) : (
+                       <div className="flex flex-wrap gap-1">
+                         {u.allowedDatabases && u.allowedDatabases.length > 0 ? (
+                            u.allowedDatabases.map(db => (
+                              <span key={db} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">
+                                {db}
+                              </span>
+                            ))
+                         ) : (
+                            <span className="text-xs text-red-400">No Access</span>
+                         )}
+                       </div>
+                     )}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button 
@@ -148,6 +186,38 @@ export const UserManagement: React.FC = () => {
               <option value={UserRole.ADMIN}>Admin</option>
             </select>
           </div>
+          
+          {/* Database Permission Selector (Only for Operators) */}
+          {newUser.role === UserRole.OPERATOR && (
+            <div className="animate-in fade-in slide-in-from-top-2">
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1 flex items-center gap-2">
+                 <Database className="w-3 h-3" /> Allowed Databases
+              </label>
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
+                 {availableDbs.length > 0 ? (
+                    availableDbs.map(db => (
+                      <div 
+                        key={db} 
+                        onClick={() => toggleDbSelection(db)}
+                        className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer text-sm transition-all ${
+                          selectedDbs.includes(db) ? 'bg-white shadow-sm border-gray-200 text-brand-700' : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                      >
+                         {selectedDbs.includes(db) 
+                           ? <CheckSquare className="w-4 h-4 text-brand-500" /> 
+                           : <Square className="w-4 h-4 text-gray-300" />}
+                         <span className="truncate">{db}</span>
+                      </div>
+                    ))
+                 ) : (
+                    <div className="text-xs text-gray-400 italic text-center py-2">No databases available</div>
+                 )}
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1.5 ml-1">
+                 {selectedDbs.length === 0 ? 'User will not see any databases.' : `${selectedDbs.length} database(s) selected.`}
+              </p>
+            </div>
+          )}
 
           <button 
             type="submit" 

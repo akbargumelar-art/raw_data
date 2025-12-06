@@ -8,6 +8,7 @@ export interface User {
   id: number;
   username: string;
   role: UserRole;
+  allowedDatabases?: string[]; // List of DB names authorized for this user
 }
 
 export interface AuthResponse {
