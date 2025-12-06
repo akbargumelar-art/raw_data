@@ -24,7 +24,7 @@ pool.getConnection((err, connection) => {
       console.error("   Hint: The database name might be wrong. Check DB_NAME in .env");
     }
   } else {
-    console.log("✅ Database connected successfully");
+    console.log("✅ Database connected successfully to " + (process.env.DB_HOST || 'agrabudi.com'));
     connection.release();
   }
 });

@@ -1,7 +1,7 @@
 
 // Set to TRUE to force "Offline/Demo Mode" without backend connection
 // Useful for previewing UI/UX without running the Node.js server
-export const USE_MOCK_API = true;
+export const USE_MOCK_API = false;
 
 // Use relative path for API. 
 // In Development: Vite proxy sends '/api' -> 'http://localhost:6002/api'
