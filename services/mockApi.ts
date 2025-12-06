@@ -14,7 +14,7 @@ const mockPasswords: Record<string, string> = {
 
 // Store tables in memory for the session
 const mockTables: Record<string, string[]> = {
-  'akbar_production_db': ['products', 'orders'],
+  'db_raw': ['products', 'orders'],
   'analytics_warehouse': ['daily_sales', 'monthly_reports'],
   'staging_db': ['test_table']
 };

@@ -57,7 +57,7 @@ DB_HOST=agrabudi.com
 DB_USER=akbar
 DB_PASS=Ciraya@555
 DB_PORT=52306
-DB_NAME=akbar
+DB_NAME=db_raw
 
 # App Config
 APP_PORT=6002

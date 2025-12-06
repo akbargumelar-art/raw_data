@@ -7,8 +7,8 @@ const pool = mysql.createPool({
   host: process.env.DB_HOST || 'agrabudi.com',
   user: process.env.DB_USER || 'akbar',
   password: process.env.DB_PASS || 'Ciraya@555',
-  // Defaulting DB_NAME to the username 'akbar' which is standard in many hosting providers
-  database: process.env.DB_NAME || 'akbar', 
+  // Defaulting DB_NAME to 'db_raw' as requested
+  database: process.env.DB_NAME || 'db_raw', 
   port: parseInt(process.env.DB_PORT || '52306'),
   waitForConnections: true,
   connectionLimit: 10,
