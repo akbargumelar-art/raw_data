@@ -52,7 +52,7 @@ export const SchemaBuilder: React.FC = () => {
       const suggestedName = file.name.split('.')[0].toLowerCase().replace(/[^a-z0-9_]/g, '_');
       setNewTableName(suggestedName);
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to analyze file' });
+      setMessage({ type: 'error', text: err.response?.data?.error || 'Gagal menganalisa file' });
     } finally {
       setAnalyzing(false);
     }
@@ -74,7 +74,7 @@ export const SchemaBuilder: React.FC = () => {
       setNewDbName('');
       setShowCreateDb(false);
     } catch (err: any) {
-      alert(err.response?.data?.error || "Failed to create database");
+      alert(err.response?.data?.error || "Gagal membuat database");
     } finally {
       setCreatingDb(false);
     }
@@ -86,7 +86,7 @@ export const SchemaBuilder: React.FC = () => {
     setMessage(null);
     try {
       await dataService.createTable(selectedDB, newTableName, columns);
-      setMessage({ type: 'success', text: `Table '${newTableName}' created successfully in ${selectedDB}!` });
+      setMessage({ type: 'success', text: `Tabel '${newTableName}' berhasil dibuat di ${selectedDB}!` });
       setTimeout(() => {
          setFile(null);
          setColumns([]);
@@ -94,7 +94,7 @@ export const SchemaBuilder: React.FC = () => {
          setMessage(null);
       }, 3000);
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to create table' });
+      setMessage({ type: 'error', text: err.response?.data?.error || 'Gagal membuat tabel' });
     } finally {
       setCreating(false);
     }
@@ -108,8 +108,8 @@ export const SchemaBuilder: React.FC = () => {
           <div className="bg-brand-50 p-2.5 rounded-xl text-brand-600">
              <FileSearch className="w-5 h-5" />
           </div>
-          <span className="flex-1">1. Analyze Source File</span>
-          <span className="text-xs font-normal text-gray-400 bg-gray-50 px-2 py-1 rounded">Step 1 of 2</span>
+          <span className="flex-1">1. Analisa File Sumber</span>
+          <span className="text-xs font-normal text-gray-400 bg-gray-50 px-2 py-1 rounded">Langkah 1 dari 2</span>
         </h3>
         
         <div className="flex flex-col md:flex-row gap-6 items-end">
@@ -136,9 +136,9 @@ export const SchemaBuilder: React.FC = () => {
             className="w-full md:w-auto px-8 py-3 bg-brand-600 text-white rounded-xl font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-brand-200 transition-all"
           >
             {analyzing ? (
-              <><RefreshCw className="w-4 h-4 animate-spin" /> Processing</>
+              <><RefreshCw className="w-4 h-4 animate-spin" /> Memproses</>
             ) : (
-              <>Analyze Structure <ArrowRight className="w-4 h-4" /></>
+              <>Analisa Struktur <ArrowRight className="w-4 h-4" /></>
             )}
           </button>
         </div>
@@ -151,8 +151,8 @@ export const SchemaBuilder: React.FC = () => {
             <div className="bg-emerald-50 p-2.5 rounded-xl text-emerald-600">
                <Table className="w-5 h-5" />
             </div>
-            <span className="flex-1">2. Configure Schema</span>
-            <span className="text-xs font-normal text-gray-400 bg-gray-50 px-2 py-1 rounded">Step 2 of 2</span>
+            <span className="flex-1">2. Konfigurasi Skema Database</span>
+            <span className="text-xs font-normal text-gray-400 bg-gray-50 px-2 py-1 rounded">Langkah 2 dari 2</span>
           </h3>
 
           {/* Table Config */}
@@ -167,13 +167,13 @@ export const SchemaBuilder: React.FC = () => {
                     onChange={e => setSelectedDB(e.target.value)}
                     className="flex-1 p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20 text-gray-700"
                   >
-                    <option value="">-- Select Database --</option>
+                    <option value="">-- Pilih Database --</option>
                     {databases.map(db => <option key={db} value={db}>{db}</option>)}
                   </select>
                   <button 
                     onClick={() => setShowCreateDb(true)}
                     className="bg-white border border-gray-200 hover:border-brand-300 text-gray-600 hover:text-brand-600 p-3 rounded-xl transition-all"
-                    title="Create New Database"
+                    title="Buat Database Baru"
                   >
                     <Plus className="w-5 h-5" />
                   </button>
@@ -184,7 +184,7 @@ export const SchemaBuilder: React.FC = () => {
                     type="text" 
                     value={newDbName}
                     onChange={e => setNewDbName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
-                    placeholder="New DB Name..."
+                    placeholder="Nama Database Baru..."
                     autoFocus
                     className="flex-1 p-3 bg-white border border-brand-300 ring-2 ring-brand-500/10 rounded-xl outline-none text-gray-700"
                   />
@@ -193,7 +193,7 @@ export const SchemaBuilder: React.FC = () => {
                     disabled={!newDbName || creatingDb}
                     className="bg-brand-600 hover:bg-brand-700 text-white p-3 rounded-xl transition-all font-medium"
                   >
-                    {creatingDb ? <RefreshCw className="w-5 h-5 animate-spin"/> : 'Create'}
+                    {creatingDb ? <RefreshCw className="w-5 h-5 animate-spin"/> : 'Simpan'}
                   </button>
                   <button 
                     onClick={() => setShowCreateDb(false)}
@@ -205,14 +205,14 @@ export const SchemaBuilder: React.FC = () => {
               )}
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">New Table Name</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Nama Tabel Baru</label>
               <div className="flex items-center">
                  <input 
                   type="text" 
                   value={newTableName}
                   onChange={e => setNewTableName(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
                   className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500/20 text-gray-700 font-mono text-sm"
-                  placeholder="e.g. raw_transactions_2024"
+                  placeholder="cth: transaksi_2024"
                 />
               </div>
             </div>
@@ -223,10 +223,10 @@ export const SchemaBuilder: React.FC = () => {
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 text-gray-500 font-semibold uppercase tracking-wider text-xs">
                 <tr>
-                  <th className="px-6 py-4">Column Name</th>
-                  <th className="px-6 py-4">Data Type</th>
+                  <th className="px-6 py-4">Nama Kolom</th>
+                  <th className="px-6 py-4">Tipe Data</th>
                   <th className="px-6 py-4 text-center">Primary Key</th>
-                  <th className="px-6 py-4 text-gray-400 font-normal normal-case italic">Sample Data</th>
+                  <th className="px-6 py-4 text-gray-400 font-normal normal-case italic">Contoh Data</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -246,13 +246,13 @@ export const SchemaBuilder: React.FC = () => {
                         onChange={e => handleColumnChange(idx, 'type', e.target.value)}
                         className="w-full bg-transparent border-b border-transparent focus:border-brand-500 outline-none text-gray-600 text-sm py-1 cursor-pointer"
                       >
-                        <option value="VARCHAR(255)">VARCHAR(255)</option>
-                        <option value="TEXT">TEXT</option>
-                        <option value="INT">INT</option>
-                        <option value="DECIMAL(10,2)">DECIMAL(10,2)</option>
-                        <option value="DATE">DATE</option>
-                        <option value="DATETIME">DATETIME</option>
-                        <option value="BOOLEAN">BOOLEAN</option>
+                        <option value="VARCHAR(255)">VARCHAR(255) (Teks Pendek)</option>
+                        <option value="VARCHAR(50)">VARCHAR(50) (No HP/Kode)</option>
+                        <option value="TEXT">TEXT (Teks Panjang)</option>
+                        <option value="INT">INT (Angka Bulat)</option>
+                        <option value="DECIMAL(10,2)">DECIMAL(10,2) (Uang)</option>
+                        <option value="DATE">DATE (Tanggal)</option>
+                        <option value="DATETIME">DATETIME (Waktu)</option>
                       </select>
                     </td>
                     <td className="px-6 py-3 text-center">
@@ -298,11 +298,11 @@ export const SchemaBuilder: React.FC = () => {
              >
                {creating ? (
                  <>
-                   <Database className="w-4 h-4 animate-bounce" /> Creating Table...
+                   <Database className="w-4 h-4 animate-bounce" /> Membuat Tabel...
                  </>
                ) : (
                  <>
-                   <Database className="w-4 h-4" /> Deploy Table
+                   <Database className="w-4 h-4" /> Deploy Tabel
                  </>
                )}
              </button>

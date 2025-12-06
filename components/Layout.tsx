@@ -55,7 +55,7 @@ export const Layout: React.FC<LayoutProps> = ({
 
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
           <div className="px-4 py-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-            Main Menu
+            Menu Utama
           </div>
           
           {/* Create Table - ADMIN ONLY */}
@@ -65,7 +65,7 @@ export const Layout: React.FC<LayoutProps> = ({
               className={navItemClass('schema')}
             >
               <FilePlus className={`w-5 h-5 ${currentPage === 'schema' ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
-              <span>Create Structure</span>
+              <span>Buat Database & Tabel</span>
             </div>
           )}
 
@@ -80,14 +80,14 @@ export const Layout: React.FC<LayoutProps> = ({
           {user.role === UserRole.ADMIN && (
             <>
               <div className="px-4 py-3 mt-6 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                Administration
+                Administrasi
               </div>
               <div 
                 onClick={() => !isLocked && onNavigate('users')}
                 className={navItemClass('users')}
               >
                 <Users className={`w-5 h-5 ${currentPage === 'users' ? 'text-brand-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
-                <span>User Management</span>
+                <span>Manajemen Pengguna</span>
               </div>
             </>
           )}
@@ -113,7 +113,7 @@ export const Layout: React.FC<LayoutProps> = ({
             className={`w-full flex items-center justify-center gap-2 bg-white hover:bg-red-50 hover:border-red-100 hover:text-red-600 border border-gray-200 text-gray-600 py-2 rounded-xl transition-all text-xs font-semibold shadow-sm ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <LogOut className="w-3 h-3" />
-            Sign Out
+            Keluar
           </button>
         </div>
       </aside>
@@ -123,14 +123,14 @@ export const Layout: React.FC<LayoutProps> = ({
         <header className="bg-white/80 backdrop-blur-md h-20 border-b border-gray-200 flex items-center justify-between px-10 sticky top-0 z-10">
           <div>
             <h2 className="text-xl font-bold text-gray-900">
-              {currentPage === 'dashboard' ? 'Data Upload' : 
-               currentPage === 'schema' ? 'Schema Builder' :
-               'System Users'}
+              {currentPage === 'dashboard' ? 'Upload Data' : 
+               currentPage === 'schema' ? 'Desain Database' :
+               'Pengguna Sistem'}
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              {currentPage === 'dashboard' ? 'Batch processing & ingestion' : 
-               currentPage === 'schema' ? 'Design and deploy database tables' :
-               'Manage access and roles'}
+              {currentPage === 'dashboard' ? 'Proses upload batch & input data' : 
+               currentPage === 'schema' ? 'Buat dan atur tabel database' :
+               'Atur akses dan peran pengguna'}
             </p>
           </div>
           <div className="flex items-center gap-4">

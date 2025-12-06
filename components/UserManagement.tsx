@@ -39,25 +39,25 @@ export const UserManagement: React.FC = () => {
     setLoading(true);
     try {
       await adminService.createUser(newUser.username, newUser.password, newUser.role, selectedDbs);
-      setMsg('User created successfully');
+      setMsg('User berhasil dibuat');
       setNewUser({ username: '', password: '', role: UserRole.OPERATOR });
       setSelectedDbs([]);
       loadData(); // Refresh list
       setTimeout(() => setMsg(''), 3000);
     } catch (error: any) {
-      setMsg(error.response?.data?.error || 'Failed to create user');
+      setMsg(error.response?.data?.error || 'Gagal membuat user');
     } finally {
       setLoading(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if(!window.confirm('Are you sure you want to delete this user?')) return;
+    if(!window.confirm('Apakah Anda yakin ingin menghapus user ini?')) return;
     try {
       await adminService.deleteUser(id);
       loadData();
     } catch (e) {
-      alert('Failed to delete');
+      alert('Gagal menghapus');
     }
   };
 
@@ -75,8 +75,8 @@ export const UserManagement: React.FC = () => {
       <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
         <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
            <div>
-             <h3 className="text-lg font-bold text-gray-900">System Users</h3>
-             <p className="text-xs text-gray-400">Manage access control</p>
+             <h3 className="text-lg font-bold text-gray-900">Pengguna Sistem</h3>
+             <p className="text-xs text-gray-400">Atur hak akses</p>
            </div>
            <span className="bg-white border border-gray-200 text-gray-600 px-3 py-1 rounded-full text-xs font-mono font-bold shadow-sm">Total: {users.length}</span>
         </div>
@@ -85,9 +85,9 @@ export const UserManagement: React.FC = () => {
             <thead className="bg-white text-gray-400 text-[10px] uppercase font-bold tracking-wider border-b border-gray-100">
               <tr>
                 <th className="px-6 py-4">Username</th>
-                <th className="px-6 py-4">Role</th>
-                <th className="px-6 py-4">Access Rights</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                <th className="px-6 py-4">Peran</th>
+                <th className="px-6 py-4">Hak Akses DB</th>
+                <th className="px-6 py-4 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -111,7 +111,7 @@ export const UserManagement: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">
                      {u.role === UserRole.ADMIN ? (
-                       <span className="text-xs text-gray-400 italic">Full System Access</span>
+                       <span className="text-xs text-gray-400 italic">Akses Penuh</span>
                      ) : (
                        <div className="flex flex-wrap gap-1">
                          {u.allowedDatabases && u.allowedDatabases.length > 0 ? (
@@ -121,7 +121,7 @@ export const UserManagement: React.FC = () => {
                               </span>
                             ))
                          ) : (
-                            <span className="text-xs text-red-400">No Access</span>
+                            <span className="text-xs text-red-400">Tidak Ada Akses</span>
                          )}
                        </div>
                      )}
@@ -130,7 +130,7 @@ export const UserManagement: React.FC = () => {
                     <button 
                       onClick={() => handleDelete(u.id)}
                       className="text-gray-300 hover:text-red-600 transition-colors p-2 hover:bg-red-50 rounded-lg"
-                      title="Delete User"
+                      title="Hapus User"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -148,7 +148,7 @@ export const UserManagement: React.FC = () => {
           <div className="bg-gray-100 p-2 rounded-xl">
              <UserPlus className="w-5 h-5 text-gray-700" />
           </div>
-          Add User
+          Tambah User
         </h3>
         
         <form onSubmit={handleCreate} className="space-y-5">
@@ -160,7 +160,7 @@ export const UserManagement: React.FC = () => {
               className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 outline-none transition-all"
               value={newUser.username}
               onChange={e => setNewUser({...newUser, username: e.target.value})}
-              placeholder="e.g. jdoe"
+              placeholder="cth: budi"
             />
           </div>
           <div>
@@ -175,7 +175,7 @@ export const UserManagement: React.FC = () => {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">Role</label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1">Peran (Role)</label>
             <select
                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 outline-none transition-all text-gray-700"
                value={newUser.role}
@@ -190,7 +190,7 @@ export const UserManagement: React.FC = () => {
           {newUser.role === UserRole.OPERATOR && (
             <div className="animate-in fade-in slide-in-from-top-2">
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 ml-1 flex items-center gap-2">
-                 <Database className="w-3 h-3" /> Allowed Databases
+                 <Database className="w-3 h-3" /> Izin Akses Database
               </label>
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 max-h-40 overflow-y-auto space-y-1 custom-scrollbar">
                  {availableDbs.length > 0 ? (
@@ -209,11 +209,11 @@ export const UserManagement: React.FC = () => {
                       </div>
                     ))
                  ) : (
-                    <div className="text-xs text-gray-400 italic text-center py-2">No databases available</div>
+                    <div className="text-xs text-gray-400 italic text-center py-2">Tidak ada database tersedia</div>
                  )}
               </div>
               <p className="text-[10px] text-gray-400 mt-1.5 ml-1">
-                 {selectedDbs.length === 0 ? 'User will not see any databases.' : `${selectedDbs.length} database(s) selected.`}
+                 {selectedDbs.length === 0 ? 'User tidak bisa melihat database apapun.' : `${selectedDbs.length} database dipilih.`}
               </p>
             </div>
           )}
@@ -223,11 +223,11 @@ export const UserManagement: React.FC = () => {
             disabled={loading}
             className="w-full bg-gray-900 hover:bg-black text-white font-bold py-3 rounded-xl transition-all shadow-lg hover:shadow-xl mt-2 flex justify-center items-center"
           >
-            {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Create Account'}
+            {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : 'Buat Akun'}
           </button>
           
           {msg && (
-            <div className={`text-xs text-center py-2 rounded-lg font-medium ${msg.includes('success') ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
+            <div className={`text-xs text-center py-2 rounded-lg font-medium ${msg.includes('berhasil') ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50'}`}>
               {msg}
             </div>
           )}

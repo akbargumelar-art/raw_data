@@ -42,17 +42,17 @@ app.get('/api/health', (req, res) => {
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  if (!token) return res.status(401).json({ error: 'Sesi habis atau tidak sah. Silakan login ulang.' });
 
   jwt.verify(token, SECRET_KEY, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Token invalid' });
+    if (err) return res.status(403).json({ error: 'Token tidak valid.' });
     req.user = user;
     next();
   });
 };
 
 const requireAdmin = (req, res, next) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Akses ditolak. Halaman ini khusus Admin.' });
   next();
 };
 
@@ -61,17 +61,17 @@ app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
     const [users] = await db.query('SELECT * FROM users WHERE username = ?', [username]);
-    if (users.length === 0) return res.status(401).json({ error: 'User not found' });
+    if (users.length === 0) return res.status(401).json({ error: 'Username tidak ditemukan.' });
     
     const user = users[0];
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.status(401).json({ error: 'Invalid password' });
+    if (!valid) return res.status(401).json({ error: 'Password salah.' });
 
     const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '8h' });
     res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
   } catch (err) {
     console.error("Login Error:", err);
-    res.status(500).json({ error: `Login failed: ${err.message}` });
+    res.status(500).json({ error: `Gagal login: ${err.message}` });
   }
 });
 
@@ -102,7 +102,7 @@ app.post('/api/admin/users', authenticateToken, requireAdmin, async (req, res) =
     );
     res.json({ success: true });
   } catch (err) {
-    if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'Username taken' });
+    if (err.code === 'ER_DUP_ENTRY') return res.status(400).json({ error: 'Username sudah digunakan.' });
     res.status(500).json({ error: err.message });
   }
 });
@@ -146,32 +146,32 @@ app.get('/api/data/databases', authenticateToken, async (req, res) => {
     }
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to list databases' });
+    res.status(500).json({ error: 'Gagal memuat daftar database.' });
   }
 });
 
 app.post('/api/data/create-database', authenticateToken, requireAdmin, async (req, res) => {
   const { databaseName } = req.body;
-  if (!databaseName) return res.status(400).json({ error: 'Database name required' });
+  if (!databaseName) return res.status(400).json({ error: 'Nama database wajib diisi.' });
   const safeName = databaseName.replace(/[^a-zA-Z0-9_]/g, '');
-  if (!safeName) return res.status(400).json({ error: 'Invalid database name' });
+  if (!safeName) return res.status(400).json({ error: 'Nama database mengandung karakter tidak valid.' });
 
   try {
     await db.query(`CREATE DATABASE ${safeName}`);
     res.json({ success: true, databaseName: safeName });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: `Gagal membuat database: ${err.message}` });
   }
 });
 
 app.get('/api/data/tables', authenticateToken, async (req, res) => {
   const dbName = req.query.db;
-  if (!dbName) return res.status(400).json({ error: 'Database parameter required' });
+  if (!dbName) return res.status(400).json({ error: 'Database belum dipilih.' });
 
   // Security Check
   const { role, allowed } = await getUserAllowedDatabases(req.user.id);
   if (role !== 'admin' && !allowed.includes(dbName)) {
-    return res.status(403).json({ error: 'Access to this database is denied' });
+    return res.status(403).json({ error: 'Anda tidak memiliki akses ke database ini.' });
   }
 
   try {
@@ -180,7 +180,7 @@ app.get('/api/data/tables', authenticateToken, async (req, res) => {
     res.json({ tables });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Failed to list tables' });
+    res.status(500).json({ error: 'Gagal memuat daftar tabel.' });
   }
 });
 
@@ -191,7 +191,7 @@ function getExcelDataWithSmartHeader(filePath) {
   const worksheet = workbook.Sheets[sheetName];
   const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
   
-  if (rawData.length === 0) throw new Error("Empty file");
+  if (rawData.length === 0) throw new Error("File kosong atau tidak terbaca.");
 
   let maxCols = 0;
   let headerRowIndex = 0;
@@ -214,14 +214,14 @@ function getExcelDataWithSmartHeader(filePath) {
 
 // SCHEMA BUILDER: Analyze File (Smart Header Detection)
 app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'File required' });
+  if (!req.file) return res.status(400).json({ error: 'File wajib diupload.' });
 
   const ext = path.extname(req.file.originalname).toLowerCase();
   
   if (ext === '.xlsx' || ext === '.xls') {
     try {
       const jsonData = getExcelDataWithSmartHeader(req.file.path);
-      if (jsonData.length === 0) throw new Error("No data found after header");
+      if (jsonData.length === 0) throw new Error("Tidak ada data ditemukan setelah baris header.");
       
       const headers = Object.keys(jsonData[0]);
       const previewData = jsonData.slice(0, 5);
@@ -230,7 +230,7 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
     } catch (err) {
       console.error("Excel Parse Error:", err);
       if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-      res.status(500).json({ error: 'Failed to parse Excel file. Ensure it is valid.' });
+      res.status(500).json({ error: 'Gagal membaca file Excel. Pastikan format valid.' });
     }
 
   } else {
@@ -252,7 +252,7 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
          analyzeAndResponse(headers, results, res, req.file.path);
       })
       .on('error', (err) => {
-         if(!headers) res.status(500).json({error: 'Failed to parse CSV'});
+         if(!headers) res.status(500).json({error: 'Gagal membaca file CSV.'});
       })
       .on('end', () => {
          analyzeAndResponse(headers, results, res, req.file.path);
@@ -262,28 +262,42 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
   function analyzeAndResponse(headers, results, res, filePath) {
     if (!headers || headers.length === 0) {
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      return res.status(400).json({ error: "Could not detect headers" });
+      return res.status(400).json({ error: "Header kolom tidak terdeteksi." });
     }
 
     const columns = headers.map(header => {
       let isInt = true;
       let isFloat = true;
       let isDate = true;
+      let maxLen = 0;
       
       for (const row of results) {
         const val = row[header];
         if (!val) continue;
-        if (isNaN(Number(val))) {
+        
+        const valStr = String(val).trim();
+        maxLen = Math.max(maxLen, valStr.length);
+
+        if (isNaN(Number(valStr))) {
           isInt = false;
           isFloat = false;
         } else {
-          if (!Number.isInteger(Number(val))) isInt = false;
+          if (!Number.isInteger(Number(valStr))) isInt = false;
         }
-        if (isNaN(Date.parse(val))) isDate = false;
+        if (isNaN(Date.parse(valStr))) isDate = false;
       }
 
       let type = 'VARCHAR(255)';
-      if (isInt) type = 'INT';
+      
+      // FIX FOR OUT OF RANGE:
+      // If looks like Integer but has > 9 digits (e.g. Phone Number 628...), treat as VARCHAR or BIGINT
+      if (isInt) {
+        if (maxLen > 9) {
+           type = 'VARCHAR(50)'; // Safer for phone numbers to avoid Overflow
+        } else {
+           type = 'INT';
+        }
+      } 
       else if (isFloat) type = 'DECIMAL(10,2)';
       else if (isDate) type = 'DATE';
 
@@ -300,7 +314,7 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
 app.post('/api/data/create-table', authenticateToken, requireAdmin, async (req, res) => {
   const { databaseName, tableName, columns } = req.body;
   if (!databaseName || !tableName || !columns) {
-    return res.status(400).json({ error: 'Missing parameters' });
+    return res.status(400).json({ error: 'Data tidak lengkap (Database, Table, Columns).' });
   }
 
   const dbId = db.escapeId(databaseName);
@@ -318,7 +332,7 @@ app.post('/api/data/create-table', authenticateToken, requireAdmin, async (req, 
     res.json({ success: true });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: `Gagal membuat tabel: ${err.message}` });
   }
 });
 
@@ -326,14 +340,14 @@ app.post('/api/data/create-table', authenticateToken, requireAdmin, async (req, 
 app.post('/api/data/upload', authenticateToken, upload.single('file'), async (req, res) => {
   const reqDb = req.body.databaseName;
   if (!req.file || !req.body.tableName || !reqDb) {
-    return res.status(400).json({ error: 'File, Database, and Table Name required' });
+    return res.status(400).json({ error: 'File, Database, dan Nama Tabel wajib diisi.' });
   }
 
   // Security Check: Verify User Permission for this DB
   const { role, allowed } = await getUserAllowedDatabases(req.user.id);
   if (role !== 'admin' && !allowed.includes(reqDb)) {
     if (req.file.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    return res.status(403).json({ error: 'You do not have permission to upload to this database.' });
+    return res.status(403).json({ error: 'Anda tidak memiliki izin akses ke database ini.' });
   }
 
   const filePath = req.file.path;
@@ -380,11 +394,14 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
      } catch (err) {
        console.error("Excel Upload Error:", err);
        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-       res.status(500).json({ 
-         error: err.code === 'ER_NO_SUCH_TABLE' 
-           ? `Table ${fullTableName} does not exist.` 
-           : `Excel Error: ${err.message}` 
-       });
+       
+       // USER FRIENDLY ERROR MAPPING
+       let friendlyError = err.message;
+       if (err.code === 'ER_NO_SUCH_TABLE') friendlyError = `Tabel ${fullTableName} tidak ditemukan.`;
+       if (err.code === 'ER_WARN_DATA_OUT_OF_RANGE') friendlyError = `Data angka terlalu besar untuk kolom database. Pastikan kolom nomor HP bertipe VARCHAR/TEXT.`;
+       if (err.code === 'ER_DATA_TOO_LONG') friendlyError = `Data teks terlalu panjang untuk kolom database.`;
+
+       res.status(500).json({ error: friendlyError });
      }
 
   // --- CSV HANDLING ---
@@ -431,7 +448,12 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
     } catch (err) {
       console.error("CSV Upload processing failed:", err);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      res.status(500).json({ error: err.code === 'ER_NO_SUCH_TABLE' ? `Table ${fullTableName} does not exist` : 'Format error or DB connection lost' });
+      
+      let friendlyError = err.message;
+       if (err.code === 'ER_NO_SUCH_TABLE') friendlyError = `Tabel ${fullTableName} tidak ditemukan.`;
+       if (err.code === 'ER_WARN_DATA_OUT_OF_RANGE') friendlyError = `Data angka terlalu besar.`;
+
+      res.status(500).json({ error: friendlyError });
     }
   }
 });
@@ -450,11 +472,10 @@ const seedAdmin = async () => {
     `;
     await db.query(createTableQuery);
     
-    // Auto-migrate: Add allowed_databases column if missing for existing installs
     try {
       await db.query("SELECT allowed_databases FROM users LIMIT 1");
     } catch (e) {
-      console.log("ℹ️ Migrating DB: Adding allowed_databases column...");
+      console.log("ℹ️ Migrating DB: Menambahkan kolom allowed_databases...");
       await db.query("ALTER TABLE users ADD COLUMN allowed_databases TEXT NULL");
     }
 
@@ -462,9 +483,9 @@ const seedAdmin = async () => {
     if (users.length === 0) {
       const hashed = await bcrypt.hash('admin123', 10);
       await db.query("INSERT INTO users (username, password, role) VALUES (?, ?, ?)", ['admin', hashed, 'admin']);
-      console.log("✅ System Initialized: Default admin user created (admin / admin123).");
+      console.log("✅ Sistem Siap: Admin default dibuat (admin / admin123).");
     } else {
-      console.log("✅ System Ready: Admin user exists.");
+      console.log("✅ Sistem Siap: Admin user ditemukan.");
     }
   } catch (e) {
     console.error("ℹ️ DB Initialization Skipped:", e.code || e.message);
@@ -481,6 +502,6 @@ app.use((req, res, next) => {
 
 const PORT = process.env.APP_PORT || 6002;
 app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+  console.log(`🚀 Server berjalan di http://0.0.0.0:${PORT}`);
   await seedAdmin();
 });

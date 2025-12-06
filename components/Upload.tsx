@@ -20,7 +20,7 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
   useEffect(() => {
     dataService.getDatabases()
       .then(setDatabases)
-      .catch(err => console.error("Failed to fetch databases", err));
+      .catch(err => console.error("Gagal memuat database", err));
   }, []);
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
            setLoadingTables(false);
         })
         .catch(err => {
-           console.error("Failed to fetch tables", err);
+           console.error("Gagal memuat tabel", err);
            setLoadingTables(false);
         });
     } else {
@@ -49,7 +49,7 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isWorking) {
         e.preventDefault();
-        e.returnValue = 'Upload in progress. Are you sure you want to leave?';
+        e.returnValue = 'Upload sedang berjalan. Yakin ingin keluar?';
         return e.returnValue;
       }
     };
@@ -68,7 +68,7 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
   const handleUpload = async () => {
     if (!file || !selectedTable || !selectedDB) return;
 
-    setStatus({ status: 'uploading', progress: 0, message: 'Reading file & preparing batch...' });
+    setStatus({ status: 'uploading', progress: 0, message: 'Membaca file & menyiapkan batch...' });
 
     try {
       const result = await dataService.uploadFile(file, selectedDB, selectedTable, (progressEvent) => {
@@ -84,12 +84,12 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
       setStatus({ 
         status: 'success', 
         progress: 100, 
-        message: `Success! Processed ${result.rowsProcessed} rows.` 
+        message: `Sukses! Berhasil memproses ${result.rowsProcessed} baris data.` 
       });
       setFile(null);
     } catch (error: any) {
       console.error(error);
-      const errorMsg = error.response?.data?.error || "Connection lost or format invalid.";
+      const errorMsg = error.response?.data?.error || "Koneksi terputus atau format file salah.";
       setStatus({ 
         status: 'error', 
         progress: 0, 
@@ -104,12 +104,12 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
       {/* 1. Database Selection (CARDS) */}
       <section>
         <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-           <Database className="w-4 h-4" /> 1. Select Target Database
+           <Database className="w-4 h-4" /> 1. Pilih Database Tujuan
         </h3>
         
         {databases.length === 0 ? (
            <div className="p-8 text-center bg-gray-50 border border-gray-200 rounded-2xl text-gray-400">
-              Loading Databases...
+              Memuat Database...
            </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -147,17 +147,17 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
       {selectedDB && (
         <section className="animate-in fade-in slide-in-from-left-2 duration-300">
           <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-            <TableIcon className="w-4 h-4" /> 2. Select Target Table
+            <TableIcon className="w-4 h-4" /> 2. Pilih Tabel Tujuan
           </h3>
           
           <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
              {loadingTables ? (
                 <div className="flex items-center gap-2 text-gray-400 text-sm">
-                   <RefreshCw className="w-4 h-4 animate-spin" /> Fetching tables from <strong>{selectedDB}</strong>...
+                   <RefreshCw className="w-4 h-4 animate-spin" /> Mengambil tabel dari <strong>{selectedDB}</strong>...
                 </div>
              ) : tables.length === 0 ? (
                 <div className="text-gray-400 text-sm italic">
-                   No tables found in this database.
+                   Tidak ada tabel ditemukan di database ini.
                 </div>
              ) : (
                 <div className="flex flex-wrap gap-2">
@@ -188,7 +188,7 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
       {selectedDB && selectedTable && (
         <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
            <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-             <UploadIcon className="w-4 h-4" /> 3. Upload Data File
+             <UploadIcon className="w-4 h-4" /> 3. Upload File Data
            </h3>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
@@ -209,8 +209,8 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
                     <div className="w-20 h-20 bg-brand-50 text-brand-500 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform shadow-sm">
                       <UploadIcon className="w-10 h-10" />
                     </div>
-                    <h4 className="text-xl font-bold text-gray-800">Drop Excel or CSV file here</h4>
-                    <p className="text-gray-400 mt-2 text-sm">Supports .xlsx, .xls, .csv (Max 100MB)</p>
+                    <h4 className="text-xl font-bold text-gray-800">Tarik file Excel atau CSV ke sini</h4>
+                    <p className="text-gray-400 mt-2 text-sm">Mendukung .xlsx, .xls, .csv (Maks 100MB)</p>
                   </label>
                 ) : (
                   <div className="animate-in zoom-in-95 duration-200">
@@ -224,14 +224,14 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
                           onClick={() => setFile(null)}
                           className="px-6 py-2.5 text-gray-600 hover:text-gray-900 font-medium hover:bg-gray-100 rounded-xl transition-colors"
                         >
-                          Change File
+                          Ganti File
                         </button>
                         <button 
                           onClick={handleUpload}
                           disabled={!selectedTable || !selectedDB}
                           className="px-8 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold shadow-lg shadow-brand-200 hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
                         >
-                          Start Upload <ArrowRight className="w-4 h-4" />
+                          Mulai Upload <ArrowRight className="w-4 h-4" />
                         </button>
                       </div>
                     ) : null}
@@ -247,9 +247,9 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
                       status.status === 'error' ? 'text-red-700' : 
                       status.status === 'success' ? 'text-green-600' : 'text-brand-600'
                     }`}>
-                      {status.status === 'uploading' ? 'Processing Data...' : 
-                      status.status === 'success' ? 'Upload Complete' : 
-                      status.status === 'error' ? 'Upload Failed' : ''}
+                      {status.status === 'uploading' ? 'Sedang Memproses Data...' : 
+                      status.status === 'success' ? 'Upload Selesai' : 
+                      status.status === 'error' ? 'Upload Gagal' : ''}
                     </span>
                     <span className="text-gray-400 text-xs font-mono bg-gray-100 px-2 py-1 rounded">{status.progress}%</span>
                 </div>

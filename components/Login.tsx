@@ -34,8 +34,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       localStorage.setItem(LOCAL_STORAGE_KEY, token);
       onLoginSuccess(user);
     } catch (err: any) {
-      // Clean error handling without polluting console
-      setError(err.response?.data?.error || 'Failed to login. Please check connection.');
+      setError(err.response?.data?.error || 'Gagal login. Periksa koneksi internet.');
     } finally {
       setLoading(false);
     }
@@ -63,7 +62,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               <Server className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight mb-2">DataFlow Pro</h1>
-            <p className="text-brand-50 text-sm font-light leading-relaxed">The enterprise standard for mass data ingestion and remote database management.</p>
+            <p className="text-brand-50 text-sm font-light leading-relaxed">Sistem manajemen data masal dan upload jarak jauh berstandar enterprise.</p>
           </div>
 
           <div className="relative z-10 text-xs text-brand-100/80 font-medium">
@@ -80,8 +79,8 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
           )}
 
           <div className="mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-1">Welcome Back</h2>
-            <p className="text-sm text-gray-500">Please enter your credentials to access the node.</p>
+            <h2 className="text-2xl font-bold text-gray-900 mb-1">Selamat Datang</h2>
+            <p className="text-sm text-gray-500">Silakan masukkan kredensial Anda untuk akses sistem.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -95,7 +94,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
             {(isDev || USE_MOCK_API) && (
               <div className="p-3 bg-brand-50 border border-brand-100 rounded-xl">
                 <p className="text-[10px] font-bold text-brand-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <Info className="w-3 h-3" /> Quick Access
+                  <Info className="w-3 h-3" /> Akses Cepat (Dev)
                 </p>
                 <div className="flex gap-2">
                   <button type="button" onClick={() => fillCredential('admin', 'admin123')} className="flex-1 text-xs bg-white text-brand-600 py-2 rounded-lg border border-brand-100 shadow-sm hover:shadow hover:border-brand-300 transition-all font-medium">
@@ -117,7 +116,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                     type="text"
                     required
                     className="w-full pl-11 pr-4 py-2.5 bg-gray-50 text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all outline-none"
-                    placeholder="Enter username"
+                    placeholder="Masukkan username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                   />
@@ -152,7 +151,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
               disabled={loading}
               className={`w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 rounded-xl transition-all shadow-lg shadow-brand-500/30 flex items-center justify-center gap-2 mt-2 ${loading ? 'opacity-75 cursor-wait' : 'hover:scale-[1.02]'}`}
             >
-              {loading ? 'Authenticating...' : 'Sign In'}
+              {loading ? 'Memproses...' : 'Masuk'}
               {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
           </form>
