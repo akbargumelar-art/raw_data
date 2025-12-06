@@ -24,7 +24,7 @@ app.use(cors());
 app.use(express.json());
 
 // SERVE STATIC FILES (React Frontend)
-// This is critical for Nginx/VPS deployment to avoid 502/Blank pages
+// This serves the built assets (JS/CSS) and index.html at root
 app.use(express.static(path.join(__dirname, '../dist')));
 
 const SECRET_KEY = process.env.JWT_SECRET || 'super_secret_key_123';
@@ -319,10 +319,14 @@ const seedAdmin = async () => {
   }
 };
 
-// Catch-all route to serve React App for any unknown path
-// Using regex instead of '*' to avoid Express 5 PathError
-app.get(/^(?!\/api).+/, (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
+// CATCH-ALL ROUTE FOR SPA (FALLBACK MIDDLEWARE)
+// This must be the last middleware/route to handle any request not matched by API or static files
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api')) {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  } else {
+    next();
+  }
 });
 
 const PORT = process.env.APP_PORT || 6002;
