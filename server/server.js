@@ -320,9 +320,12 @@ const seedAdmin = async () => {
 };
 
 // CATCH-ALL ROUTE FOR SPA (FALLBACK MIDDLEWARE)
-// This must be the last middleware/route to handle any request not matched by API or static files
+// Optimized to only catch "navigation" requests, not missing assets (images, js, etc.)
 app.use((req, res, next) => {
-  if (req.method === 'GET' && !req.path.startsWith('/api')) {
+  // If request method is GET
+  // AND path does NOT start with /api
+  // AND path does NOT contain a dot (files usually have extensions like .js, .css, .png)
+  if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.includes('.')) {
     res.sendFile(path.join(__dirname, '../dist/index.html'));
   } else {
     next();

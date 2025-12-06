@@ -33,7 +33,7 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
       localStorage.setItem(LOCAL_STORAGE_KEY, token);
       onLoginSuccess(user);
     } catch (err: any) {
-      console.error(err);
+      // Clean error handling without polluting console
       setError(err.response?.data?.error || 'Failed to login. Please check connection.');
     } finally {
       setLoading(false);
