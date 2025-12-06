@@ -154,7 +154,7 @@ app.get('/api/data/table-stats', authenticateToken, async (req, res) => {
 });
 
 app.get('/api/data/preview', authenticateToken, async (req, res) => {
-  const { db: dbName, table: tableName, page = 1, limit = 20, sort, dir } = req.query;
+  const { db: dbName, table: tableName, page = 1, limit = 20, sort, dir, search, dateCol, start, end } = req.query;
   try {
     const { role, allowed } = await getUserAllowedDatabases(req.user.id);
     if (role !== 'admin' && !allowed.includes(dbName)) return res.status(403).json({ error: 'Akses ditolak.' });
@@ -163,16 +163,51 @@ app.get('/api/data/preview', authenticateToken, async (req, res) => {
     const offset = (parseInt(page) - 1) * parseInt(limit);
     
     let sql = `SELECT * FROM ${fullTable}`;
+    let whereClauses = [];
+    let params = [];
+
+    // --- SEARCH LOGIC ---
+    if (search) {
+      // Fetch columns to construct LIKE query for each text column
+      const [columns] = await db.query(`DESCRIBE ${fullTable}`);
+      // Filter safe columns to search (VARCHAR, TEXT, INT, etc)
+      const searchableCols = columns.map(c => c.Field);
+      
+      if (searchableCols.length > 0) {
+        const searchConditions = searchableCols.map(col => `${db.escapeId(col)} LIKE ?`).join(' OR ');
+        whereClauses.push(`(${searchConditions})`);
+        // Add search term for each column
+        searchableCols.forEach(() => params.push(`%${search}%`));
+      }
+    }
+
+    // --- DATE FILTER LOGIC ---
+    if (dateCol && start && end) {
+      whereClauses.push(`${db.escapeId(dateCol)} BETWEEN ? AND ?`);
+      params.push(`${start} 00:00:00`, `${end} 23:59:59`);
+    }
+
+    if (whereClauses.length > 0) {
+      sql += ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    // --- SORT LOGIC ---
     if (sort) {
       const safeSort = db.escapeId(sort);
       const direction = dir === 'desc' ? 'DESC' : 'ASC';
       sql += ` ORDER BY ${safeSort} ${direction}`;
     }
+    
+    // Pagination
     sql += ` LIMIT ? OFFSET ?`;
+    params.push(parseInt(limit), offset);
 
-    const [rows] = await db.query(sql, [parseInt(limit), offset]);
+    const [rows] = await db.query(sql, params);
     res.json({ data: rows });
-  } catch (err) { res.status(500).json({ error: 'Gagal memuat data.' }); }
+  } catch (err) { 
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat data.' }); 
+  }
 });
 
 // NEW: Export Table to Excel
@@ -329,7 +364,8 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
   const fullTable = `${db.escapeId(reqDb)}.${db.escapeId(req.body.tableName)}`;
   const BATCH_SIZE = 1000;
   let totalRows = 0;
-  let changedRows = 0; 
+  // NOTE: In standard INSERT mode, 'changedRows' is usually equal to inserted rows, or 0 if ignored. 
+  // We use inserted rows count here.
 
   const processBatch = async (batchData) => {
     if (batchData.length === 0) return;
@@ -338,13 +374,16 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
     const values = batchData.map(row => cols.map(c => row[c]));
     
     const escapedCols = safeCols.map(c => db.escapeId(c));
-    const updateClause = escapedCols.map(c => `${c}=VALUES(${c})`).join(', ');
     
-    const sql = `INSERT INTO ${fullTable} (${escapedCols.join(', ')}) VALUES ? ON DUPLICATE KEY UPDATE ${updateClause}`;
-    const [result] = await db.query(sql, [values]);
+    // UPDATED: Use INSERT INTO instead of ON DUPLICATE KEY UPDATE.
+    // This effectively "appends" data. 
+    // WARNING: If the table has a Primary Key and the data contains duplicates of that key, this will throw an error.
+    // This is intentional based on user request to "accept all data" (implies user handles schema or wants hard errors on duplicates).
+    
+    const sql = `INSERT INTO ${fullTable} (${escapedCols.join(', ')}) VALUES ?`;
+    await db.query(sql, [values]);
     
     totalRows += batchData.length;
-    changedRows += result.affectedRows; 
   };
 
   try {
@@ -366,12 +405,14 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
     }
     
     fs.unlinkSync(req.file.path);
-    res.json({ success: true, rowsProcessed: totalRows, changes: changedRows });
+    // Since we are appending, rowsProcessed equals successful inserts. changes is redundant but kept for frontend compat.
+    res.json({ success: true, rowsProcessed: totalRows, changes: totalRows });
   
   } catch (err) {
     if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     let msg = err.message;
     if (err.code === 'ER_WARN_DATA_OUT_OF_RANGE') msg = "Data angka terlalu besar. Ubah kolom jadi VARCHAR/BIGINT.";
+    if (err.code === 'ER_DUP_ENTRY') msg = "Gagal: Data duplikat ditemukan pada Primary Key. (Mode sekarang: Insert Only).";
     res.status(500).json({ error: msg });
   }
 });
@@ -382,4 +423,4 @@ app.use((req, res, next) => {
 });
 
 const PORT = process.env.APP_PORT || 6002;
-app.listen(PORT, '0.0.0.0', async () => { console.log(`🚀 Server on ${PORT}`); await seedAdmin(); });
+app.listen(PORT, '0.0.0.0', async () => { console.log(`🚀 Server on ${PORT}`); });

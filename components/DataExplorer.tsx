@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/api';
-import { TableStats } from '../types';
-import { Database, Table as TableIcon, Server, Search, ChevronRight, ChevronLeft, HardDrive, Calendar, RefreshCw, Download, ArrowUpDown, ArrowUp, ArrowDown, Code, Play } from 'lucide-react';
+import { TableStats, TableColumn } from '../types';
+import { Database, Table as TableIcon, Server, Search, ChevronRight, ChevronLeft, HardDrive, Calendar, RefreshCw, Download, ArrowUpDown, ArrowUp, ArrowDown, Code, Play, Filter, X } from 'lucide-react';
 
 export const DataExplorer: React.FC = () => {
   const [databases, setDatabases] = useState<string[]>([]);
@@ -24,6 +24,16 @@ export const DataExplorer: React.FC = () => {
   // Sorting State
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null);
 
+  // Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearch, setActiveSearch] = useState(''); // Trigger search only on Enter/Click
+
+  const [schema, setSchema] = useState<TableColumn[]>([]);
+  const [dateColumn, setDateColumn] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
   // SQL Mode State
   const [sqlMode, setSqlMode] = useState(false);
   const [sqlQuery, setSqlQuery] = useState('');
@@ -45,24 +55,49 @@ export const DataExplorer: React.FC = () => {
       setSelectedTable('');
       setStats(null);
       setData([]);
+      setSchema([]);
       dataService.getTables(selectedDB)
         .then(setTables)
         .catch(console.error);
     }
   }, [selectedDB]);
 
+  // Load Schema to find Date Columns
+  useEffect(() => {
+    if (selectedDB && selectedTable) {
+      // Reset filters
+      setDateColumn('');
+      setStartDate('');
+      setEndDate('');
+      setSearchQuery('');
+      setActiveSearch('');
+      setPage(1);
+
+      dataService.getTableSchema(selectedDB, selectedTable)
+        .then(cols => {
+           setSchema(cols);
+           // Auto-select first date column if exists
+           const dateCol = cols.find(c => c.type.includes('DATE') || c.type.includes('TIME'));
+           if (dateCol) setDateColumn(dateCol.name);
+        })
+        .catch(console.error);
+    }
+  }, [selectedTable, selectedDB]);
+
   // Load Stats & Data
   useEffect(() => {
     if (selectedDB && selectedTable && !sqlMode) {
       fetchData();
     }
-  }, [selectedDB, selectedTable, page, sortConfig, sqlMode]);
+  }, [selectedDB, selectedTable, page, sortConfig, activeSearch, sqlMode]); // Trigger fetch on activeSearch change
 
-  // Reset page when table changes
+  // Filter fetch trigger (separate to prevent loop if deps mixed)
   useEffect(() => {
-    setPage(1);
-    setSortConfig(null);
-  }, [selectedTable]);
+     if(selectedDB && selectedTable && !sqlMode && startDate && endDate && dateColumn) {
+        setPage(1); // Reset to page 1 on filter
+        fetchData();
+     }
+  }, [startDate, endDate, dateColumn]);
 
   const fetchData = () => {
     setLoading(true);
@@ -76,7 +111,9 @@ export const DataExplorer: React.FC = () => {
       page, 
       15, 
       sortConfig?.key, 
-      sortConfig?.direction
+      sortConfig?.direction,
+      activeSearch,
+      (dateColumn && startDate && endDate) ? { column: dateColumn, start: startDate, end: endDate } : undefined
     )
     .then(res => {
       setData(res.data || []);
@@ -117,6 +154,14 @@ export const DataExplorer: React.FC = () => {
     }
   };
 
+  const clearFilters = () => {
+    setSearchQuery('');
+    setActiveSearch('');
+    setStartDate('');
+    setEndDate('');
+    fetchData();
+  };
+
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -137,51 +182,141 @@ export const DataExplorer: React.FC = () => {
     <div className="max-w-7xl mx-auto space-y-6">
       
       {/* 1. SELECTION BAR */}
-      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4 items-center">
-         <div className="flex-1 w-full">
-            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block pl-1">Database</label>
-            <div className="relative">
-              <Database className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
-              <select 
-                value={selectedDB}
-                onChange={e => setSelectedDB(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none transition-all appearance-none cursor-pointer hover:bg-gray-100"
-              >
-                <option value="">-- Pilih Database --</option>
-                {databases.map(db => <option key={db} value={db}>{db}</option>)}
-              </select>
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-4">
+         <div className="flex flex-col md:flex-row gap-4 items-center">
+            <div className="flex-1 w-full">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block pl-1">Database</label>
+                <div className="relative">
+                  <Database className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                  <select 
+                    value={selectedDB}
+                    onChange={e => setSelectedDB(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none transition-all appearance-none cursor-pointer hover:bg-gray-100"
+                  >
+                    <option value="">-- Pilih Database --</option>
+                    {databases.map(db => <option key={db} value={db}>{db}</option>)}
+                  </select>
+                </div>
+            </div>
+            
+            {!sqlMode && (
+              <div className="flex-1 w-full">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block pl-1">Tabel</label>
+                  <div className="relative">
+                    <TableIcon className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                    <select 
+                      value={selectedTable}
+                      onChange={e => setSelectedTable(e.target.value)}
+                      disabled={!selectedDB}
+                      className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none transition-all appearance-none cursor-pointer hover:bg-gray-100 disabled:opacity-50"
+                    >
+                      <option value="">-- Pilih Tabel --</option>
+                      {tables.map(tb => <option key={tb} value={tb}>{tb}</option>)}
+                    </select>
+                  </div>
+              </div>
+            )}
+
+            {/* TOGGLE SQL MODE */}
+            <div className="flex items-end h-full pt-6">
+                <button 
+                  onClick={() => setSqlMode(!sqlMode)}
+                  className={`px-4 py-2.5 rounded-xl border font-bold text-sm flex items-center gap-2 transition-all ${
+                    sqlMode ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <Code className="w-4 h-4" /> {sqlMode ? 'Tutup SQL' : 'SQL Mode'}
+                </button>
             </div>
          </div>
-         
-         {!sqlMode && (
-           <div className="flex-1 w-full">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block pl-1">Tabel</label>
-              <div className="relative">
-                <TableIcon className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
-                <select 
-                  value={selectedTable}
-                  onChange={e => setSelectedTable(e.target.value)}
-                  disabled={!selectedDB}
-                  className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-brand-500/20 outline-none transition-all appearance-none cursor-pointer hover:bg-gray-100 disabled:opacity-50"
-                >
-                  <option value="">-- Pilih Tabel --</option>
-                  {tables.map(tb => <option key={tb} value={tb}>{tb}</option>)}
-                </select>
-              </div>
+
+         {/* FILTER BAR (Only in Non-SQL Mode) */}
+         {selectedTable && !sqlMode && (
+           <div className="border-t border-gray-100 pt-4 animate-in fade-in slide-in-from-top-2">
+             <div className="flex flex-col md:flex-row gap-4 items-end">
+               {/* Search Input */}
+               <div className="flex-1 w-full">
+                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block pl-1">Cari Data</label>
+                 <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+                    <input 
+                      type="text" 
+                      placeholder="Cari teks di semua kolom..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && setActiveSearch(searchQuery)}
+                      className="w-full pl-9 pr-10 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 outline-none"
+                    />
+                    {searchQuery && (
+                      <button 
+                        onClick={() => { setSearchQuery(''); setActiveSearch(''); }}
+                        className="absolute right-3 top-2.5 text-gray-300 hover:text-gray-600"
+                      >
+                         <X className="w-4 h-4" />
+                      </button>
+                    )}
+                 </div>
+               </div>
+               
+               {/* Search Button */}
+               <button 
+                 onClick={() => setActiveSearch(searchQuery)} 
+                 className="bg-brand-600 hover:bg-brand-700 text-white p-2.5 rounded-xl"
+               >
+                 <Search className="w-4 h-4" />
+               </button>
+
+               <div className="w-px h-8 bg-gray-200 mx-2 hidden md:block"></div>
+
+               {/* Toggle Advanced Filter */}
+               <button 
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`px-4 py-2.5 rounded-xl border text-sm font-medium flex items-center gap-2 transition-all ${
+                    showFilters || (startDate && endDate) ? 'bg-brand-50 border-brand-200 text-brand-700' : 'bg-white border-gray-200 text-gray-600'
+                  }`}
+               >
+                 <Filter className="w-4 h-4" /> Filter Tanggal
+               </button>
+             </div>
+
+             {/* Expanded Date Filters */}
+             {(showFilters || (startDate && endDate)) && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200 grid grid-cols-1 md:grid-cols-4 gap-4 items-end animate-in fade-in slide-in-from-top-2">
+                   <div className="col-span-1 md:col-span-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block pl-1">Kolom Tanggal (Acuan)</label>
+                      <select 
+                         value={dateColumn} 
+                         onChange={e => setDateColumn(e.target.value)}
+                         className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm"
+                      >
+                         <option value="">-- Pilih Kolom --</option>
+                         {schema.filter(c => c.type.includes('DATE') || c.type.includes('TIME')).map(c => (
+                            <option key={c.name} value={c.name}>{c.name} ({c.type})</option>
+                         ))}
+                      </select>
+                   </div>
+                   <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block pl-1">Mulai</label>
+                      <input 
+                         type="date" 
+                         value={startDate}
+                         onChange={e => setStartDate(e.target.value)}
+                         className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm"
+                      />
+                   </div>
+                   <div>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 block pl-1">Sampai</label>
+                      <input 
+                         type="date" 
+                         value={endDate}
+                         onChange={e => setEndDate(e.target.value)}
+                         className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm"
+                      />
+                   </div>
+                </div>
+             )}
            </div>
          )}
-
-         {/* TOGGLE SQL MODE */}
-         <div className="flex items-end h-full pt-6">
-            <button 
-              onClick={() => setSqlMode(!sqlMode)}
-              className={`px-4 py-2.5 rounded-xl border font-bold text-sm flex items-center gap-2 transition-all ${
-                sqlMode ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-               <Code className="w-4 h-4" /> {sqlMode ? 'Tutup SQL' : 'SQL Mode'}
-            </button>
-         </div>
       </div>
 
       {/* === SQL MODE INTERFACE === */}
@@ -301,7 +436,10 @@ export const DataExplorer: React.FC = () => {
                   ) : data.length === 0 ? (
                      <div className="flex flex-col items-center justify-center h-64 text-gray-300">
                         <TableIcon className="w-12 h-12 mb-2 opacity-20" />
-                        <p>Tidak ada data</p>
+                        <p>{(activeSearch || startDate) ? 'Tidak ada hasil pencarian' : 'Tidak ada data'}</p>
+                        {(activeSearch || startDate) && (
+                           <button onClick={clearFilters} className="mt-2 text-xs text-brand-600 hover:underline">Reset Filter</button>
+                        )}
                      </div>
                   ) : (
                     <table className="w-full text-left text-sm whitespace-nowrap">

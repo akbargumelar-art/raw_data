@@ -66,20 +66,28 @@ export const dataService = {
     return response.data;
   },
 
-  // UPDATED: Support Sorting
+  // UPDATED: Support Sorting, Searching, and Date Filtering
   getTableData: async (
     dbName: string, 
     tableName: string, 
     page: number = 1, 
     limit: number = 20,
     sortColumn?: string,
-    sortDirection?: 'asc' | 'desc'
+    sortDirection?: 'asc' | 'desc',
+    search?: string,
+    dateFilter?: { column: string, start: string, end: string }
   ): Promise<{data: any[], total: number}> => {
     if (USE_MOCK_API) return { data: [], total: 0 };
     
     let url = `/data/preview?db=${dbName}&table=${tableName}&page=${page}&limit=${limit}`;
     if (sortColumn) {
       url += `&sort=${sortColumn}&dir=${sortDirection || 'asc'}`;
+    }
+    if (search) {
+      url += `&search=${encodeURIComponent(search)}`;
+    }
+    if (dateFilter && dateFilter.column && dateFilter.start && dateFilter.end) {
+      url += `&dateCol=${dateFilter.column}&start=${dateFilter.start}&end=${dateFilter.end}`;
     }
     
     const response = await api.get(url);
