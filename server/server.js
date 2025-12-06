@@ -7,15 +7,19 @@ import multer from 'multer';
 import csv from 'csv-parser';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import * as XLSX from 'xlsx'; // Requires npm install xlsx
 import { fileURLToPath } from 'url';
-import db from './db.js'; // Note the .js extension is required in ESM
+import { createRequire } from 'module'; // Import createRequire to load CJS modules safely
+import db from './db.js';
 
 dotenv.config();
 
 // Reconstruct __dirname for ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize Require for CJS modules (Bulletproof way to load xlsx)
+const require = createRequire(import.meta.url);
+const XLSX = require('xlsx');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
@@ -25,7 +29,6 @@ app.use(cors());
 app.use(express.json());
 
 // SERVE STATIC FILES (React Frontend)
-// This serves the built assets (JS/CSS) and index.html at root
 app.use(express.static(path.join(__dirname, '../dist')));
 
 const SECRET_KEY = process.env.JWT_SECRET || 'super_secret_key_123';
@@ -117,8 +120,6 @@ app.get('/api/data/databases', authenticateToken, async (req, res) => {
 app.post('/api/data/create-database', authenticateToken, async (req, res) => {
   const { databaseName } = req.body;
   if (!databaseName) return res.status(400).json({ error: 'Database name required' });
-
-  // Basic validation to prevent injection or invalid names
   const safeName = databaseName.replace(/[^a-zA-Z0-9_]/g, '');
   if (!safeName) return res.status(400).json({ error: 'Invalid database name' });
 
@@ -151,21 +152,14 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
   const ext = path.extname(req.file.originalname).toLowerCase();
   
   if (ext === '.xlsx' || ext === '.xls') {
-    // HANDLE EXCEL (With Smart Header Detection)
     try {
       const workbook = XLSX.readFile(req.file.path);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      
-      // Convert sheet to array of arrays (raw)
       const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
       
-      if (rawData.length === 0) {
-         throw new Error("Empty file");
-      }
+      if (rawData.length === 0) throw new Error("Empty file");
 
-      // SMART DETECTION: Find the row with the most non-empty columns in the first 10 rows
-      // This skips metadata/title rows often found in reports
       let maxCols = 0;
       let headerRowIndex = 0;
       const limit = Math.min(rawData.length, 10);
@@ -181,11 +175,7 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
         }
       }
 
-      // Re-read using the detected header row
-      // 'range' option in sheet_to_json allows skipping rows
       const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex });
-      
-      // Extract headers from the first valid object
       if (jsonData.length === 0) throw new Error("No data found after header");
       const headers = Object.keys(jsonData[0]);
       const previewData = jsonData.slice(0, 5);
@@ -199,7 +189,6 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
     }
 
   } else {
-    // HANDLE CSV (Fallback to existing logic)
     const results = [];
     const maxPreview = 5;
     let headers = null;
@@ -263,7 +252,6 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
   }
 });
 
-// SCHEMA BUILDER: Create Table
 app.post('/api/data/create-table', authenticateToken, async (req, res) => {
   const { databaseName, tableName, columns } = req.body;
   if (!databaseName || !tableName || !columns) {
@@ -289,7 +277,6 @@ app.post('/api/data/create-table', authenticateToken, async (req, res) => {
   }
 });
 
-// STREAMING UPLOAD LOGIC
 app.post('/api/data/upload', authenticateToken, upload.single('file'), async (req, res) => {
   if (!req.file || !req.body.tableName || !req.body.databaseName) {
     return res.status(400).json({ error: 'File, Database, and Table Name required' });
@@ -307,15 +294,11 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
 
   const processBatch = async (batchData) => {
     if (batchData.length === 0) return;
-    
     const cols = Object.keys(batchData[0]);
     const values = batchData.map(row => cols.map(c => row[c]));
-    
     const escapedCols = cols.map(c => db.escapeId(c));
     const updateClause = escapedCols.map(c => `${c}=VALUES(${c})`).join(', ');
-    
     const sql = `INSERT INTO ${fullTableName} (${escapedCols.join(', ')}) VALUES ? ON DUPLICATE KEY UPDATE ${updateClause}`;
-    
     await db.query(sql, [values]);
     totalProcessed += batchData.length;
   };
@@ -327,7 +310,6 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
     stream.on('data', async (data) => {
       if (!headers) headers = Object.keys(data);
       rows.push(data);
-
       if (rows.length >= BATCH_SIZE) {
         stream.pause();
         try {
@@ -340,7 +322,6 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
         }
       }
     });
-
     stream.on('end', async () => {
       try {
         if (rows.length > 0) await processBatch(rows);
@@ -350,7 +331,6 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
         reject(err);
       }
     });
-
     stream.on('error', (err) => {
       reject(err);
     });
@@ -366,7 +346,6 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
   }
 });
 
-// Seed default admin
 const seedAdmin = async () => {
   try {
     const createTableQuery = `
@@ -389,17 +368,11 @@ const seedAdmin = async () => {
       console.log("✅ System Ready: Admin user exists.");
     }
   } catch (e) {
-    // Suppress error if it's just about database connection failing (handled elsewhere)
     console.error("ℹ️ DB Initialization Skipped:", e.code || e.message);
   }
 };
 
-// CATCH-ALL ROUTE FOR SPA (FALLBACK MIDDLEWARE)
-// Optimized to only catch "navigation" requests, not missing assets (images, js, etc.)
 app.use((req, res, next) => {
-  // If request method is GET
-  // AND path does NOT start with /api
-  // AND path does NOT contain a dot (files usually have extensions like .js, .css, .png)
   if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.includes('.')) {
     res.sendFile(path.join(__dirname, '../dist/index.html'));
   } else {
@@ -408,8 +381,6 @@ app.use((req, res, next) => {
 });
 
 const PORT = process.env.APP_PORT || 6002;
-
-// Listen on 0.0.0.0 to ensure external access via Nginx Proxy
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   await seedAdmin();
