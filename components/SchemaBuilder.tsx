@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/api';
 import { TableColumn } from '../types';
-import { FileSearch, Database, ArrowRight, Table, Check, AlertCircle, RefreshCw, Plus, X, Pencil, Save, List, Info, Trash2, Layers } from 'lucide-react';
+import { FileSearch, Database, ArrowRight, Table, Check, AlertCircle, RefreshCw, Plus, X, Pencil, Save, List, Info, Trash2, Layers, MoveUp, MoveDown } from 'lucide-react';
 
 export const SchemaBuilder: React.FC = () => {
   // Tabs
@@ -118,6 +119,16 @@ export const SchemaBuilder: React.FC = () => {
     const newCols = [...createColumns];
     newCols.splice(index, 1);
     setCreateColumns(newCols);
+  };
+
+  const handleMoveColumn = (index: number, direction: 'up' | 'down') => {
+    const newCols = [...createColumns];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    if (targetIndex >= 0 && targetIndex < newCols.length) {
+      [newCols[index], newCols[targetIndex]] = [newCols[targetIndex], newCols[index]];
+      setCreateColumns(newCols);
+    }
   };
 
   const handleColumnChange = (index: number, field: keyof TableColumn, value: any) => {
@@ -351,7 +362,7 @@ export const SchemaBuilder: React.FC = () => {
                       <th className="px-6 py-4">Tipe Data</th>
                       <th className="px-6 py-4 text-center">Primary Key</th>
                       <th className="px-6 py-4 text-gray-400 font-normal italic">Contoh Data</th>
-                      <th className="px-4 py-4 w-10"></th>
+                      <th className="px-4 py-4 w-28 text-center">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 bg-white">
@@ -398,10 +409,27 @@ export const SchemaBuilder: React.FC = () => {
                         <td className="px-6 py-3 text-gray-400 italic text-xs">
                           {previewData[0] ? (previewData[0][col.name] || '-') : '-'}
                         </td>
-                        <td className="px-4 py-3 text-center">
+                        <td className="px-4 py-3 text-center flex items-center justify-center gap-1">
+                           <button 
+                             onClick={() => handleMoveColumn(idx, 'up')}
+                             disabled={idx === 0}
+                             className="p-1 text-gray-400 hover:text-brand-600 disabled:opacity-20 transition-colors"
+                             title="Geser Atas"
+                           >
+                             <MoveUp className="w-4 h-4" />
+                           </button>
+                           <button 
+                             onClick={() => handleMoveColumn(idx, 'down')}
+                             disabled={idx === createColumns.length - 1}
+                             className="p-1 text-gray-400 hover:text-brand-600 disabled:opacity-20 transition-colors"
+                             title="Geser Bawah"
+                           >
+                             <MoveDown className="w-4 h-4" />
+                           </button>
+                           <div className="w-px h-4 bg-gray-200 mx-1"></div>
                            <button 
                              onClick={() => handleRemoveColumn(idx)}
-                             className="text-gray-300 hover:text-red-500 transition-colors"
+                             className="p-1 text-gray-300 hover:text-red-500 transition-colors"
                              title="Hapus Kolom"
                            >
                              <Trash2 className="w-4 h-4" />
