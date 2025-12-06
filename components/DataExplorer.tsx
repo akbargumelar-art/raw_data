@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/api';
 import { TableStats, TableColumn } from '../types';
-import { Database, Table as TableIcon, Server, Search, ChevronRight, ChevronLeft, HardDrive, Calendar, RefreshCw, Download, ArrowUpDown, ArrowUp, ArrowDown, Code, Play, Filter, X } from 'lucide-react';
+import { Database, Table as TableIcon, Server, Search, ChevronRight, ChevronLeft, HardDrive, Calendar, RefreshCw, Download, ArrowUpDown, ArrowUp, ArrowDown, Code, Play, Filter, X, Settings, Eye, EyeOff, MoveUp, MoveDown, RotateCcw } from 'lucide-react';
 
 export const DataExplorer: React.FC = () => {
   const [databases, setDatabases] = useState<string[]>([]);
@@ -34,6 +34,10 @@ export const DataExplorer: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
+  // Column Management State
+  const [columnSettings, setColumnSettings] = useState<{name: string, visible: boolean}[]>([]);
+  const [showColSettingsModal, setShowColSettingsModal] = useState(false);
+
   // SQL Mode State
   const [sqlMode, setSqlMode] = useState(false);
   const [sqlQuery, setSqlQuery] = useState('');
@@ -56,13 +60,14 @@ export const DataExplorer: React.FC = () => {
       setStats(null);
       setData([]);
       setSchema([]);
+      setColumnSettings([]); // Reset columns
       dataService.getTables(selectedDB)
         .then(setTables)
         .catch(console.error);
     }
   }, [selectedDB]);
 
-  // Load Schema to find Date Columns
+  // Load Schema to find Date Columns & Init Column Settings
   useEffect(() => {
     if (selectedDB && selectedTable) {
       // Reset filters
@@ -76,6 +81,9 @@ export const DataExplorer: React.FC = () => {
       dataService.getTableSchema(selectedDB, selectedTable)
         .then(cols => {
            setSchema(cols);
+           // Initialize Column Settings (All visible by default)
+           setColumnSettings(cols.map(c => ({ name: c.name, visible: true })));
+
            // Auto-select first date column if exists
            const dateCol = cols.find(c => c.type.includes('DATE') || c.type.includes('TIME'));
            if (dateCol) {
@@ -95,9 +103,9 @@ export const DataExplorer: React.FC = () => {
     if (selectedDB && selectedTable && !sqlMode) {
       fetchData();
     }
-  }, [selectedDB, selectedTable, page, sortConfig, activeSearch, sqlMode]); // Trigger fetch on activeSearch change
+  }, [selectedDB, selectedTable, page, sortConfig, activeSearch, sqlMode]); 
 
-  // Filter fetch trigger (separate to prevent loop if deps mixed)
+  // Filter fetch trigger
   useEffect(() => {
      if(selectedDB && selectedTable && !sqlMode && startDate && endDate && dateColumn) {
         setPage(1); // Reset to page 1 on filter
@@ -160,6 +168,27 @@ export const DataExplorer: React.FC = () => {
     }
   };
 
+  // --- COLUMN MANAGEMENT FUNCTIONS ---
+  const toggleColumnVisibility = (index: number) => {
+    const newSettings = [...columnSettings];
+    newSettings[index].visible = !newSettings[index].visible;
+    setColumnSettings(newSettings);
+  };
+
+  const moveColumn = (index: number, direction: 'up' | 'down') => {
+    const newSettings = [...columnSettings];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    if (targetIndex >= 0 && targetIndex < newSettings.length) {
+      [newSettings[index], newSettings[targetIndex]] = [newSettings[targetIndex], newSettings[index]];
+      setColumnSettings(newSettings);
+    }
+  };
+
+  const resetColumns = () => {
+    setColumnSettings(schema.map(c => ({ name: c.name, visible: true })));
+  };
+
   const clearFilters = () => {
     setSearchQuery('');
     setActiveSearch('');
@@ -184,8 +213,13 @@ export const DataExplorer: React.FC = () => {
     }) + ' WIB';
   };
 
+  // Determine actual visible columns to render
+  const visibleColumns = columnSettings.filter(c => c.visible).map(c => c.name);
+  // Fallback if settings are empty (e.g. initial load glitch)
+  const renderColumns = visibleColumns.length > 0 ? visibleColumns : (data.length > 0 ? Object.keys(data[0]) : []);
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6 relative">
       
       {/* 1. SELECTION BAR */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-4">
@@ -236,7 +270,7 @@ export const DataExplorer: React.FC = () => {
             </div>
          </div>
 
-         {/* FILTER BAR (Only in Non-SQL Mode) */}
+         {/* FILTER & COLUMN BAR (Only in Non-SQL Mode) */}
          {selectedTable && !sqlMode && (
            <div className="border-t border-gray-100 pt-4 animate-in fade-in slide-in-from-top-2">
              <div className="flex flex-col md:flex-row gap-4 items-end">
@@ -282,7 +316,17 @@ export const DataExplorer: React.FC = () => {
                     showFilters || (startDate && endDate) ? 'bg-brand-50 border-brand-200 text-brand-700' : 'bg-white border-gray-200 text-gray-600'
                   }`}
                >
-                 <Filter className="w-4 h-4" /> Filter Tanggal
+                 <Filter className="w-4 h-4" /> Filter
+               </button>
+
+               {/* Column Settings Toggle */}
+               <button 
+                  onClick={() => setShowColSettingsModal(!showColSettingsModal)}
+                  className={`px-4 py-2.5 rounded-xl border text-sm font-medium flex items-center gap-2 transition-all ${
+                    showColSettingsModal ? 'bg-gray-100 border-gray-300 text-gray-900' : 'bg-white border-gray-200 text-gray-600'
+                  }`}
+               >
+                 <Settings className="w-4 h-4" /> Kolom
                </button>
              </div>
 
@@ -325,6 +369,59 @@ export const DataExplorer: React.FC = () => {
            </div>
          )}
       </div>
+
+      {/* COLUMN SETTINGS MODAL */}
+      {showColSettingsModal && !sqlMode && (
+         <div className="absolute top-48 right-0 z-20 w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 animate-in zoom-in-95 duration-200 flex flex-col max-h-[500px]">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50 rounded-t-2xl">
+               <h4 className="font-bold text-gray-700 text-sm flex items-center gap-2">
+                  <Settings className="w-4 h-4" /> Atur Kolom
+               </h4>
+               <button onClick={resetColumns} className="text-[10px] bg-white border border-gray-200 px-2 py-1 rounded hover:bg-gray-50 flex items-center gap-1 text-gray-500">
+                  <RotateCcw className="w-3 h-3" /> Reset
+               </button>
+            </div>
+            <div className="overflow-y-auto p-2 custom-scrollbar flex-1 space-y-1">
+               {columnSettings.map((col, idx) => (
+                  <div key={col.name} className={`flex items-center justify-between p-2 rounded-lg border ${col.visible ? 'bg-white border-gray-100' : 'bg-gray-50 border-transparent opacity-60'}`}>
+                     <div className="flex items-center gap-3 overflow-hidden">
+                        <button 
+                           onClick={() => toggleColumnVisibility(idx)}
+                           className={`p-1 rounded hover:bg-gray-100 ${col.visible ? 'text-brand-600' : 'text-gray-400'}`}
+                        >
+                           {col.visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                        <span className={`text-sm truncate font-mono ${col.visible ? 'text-gray-700' : 'text-gray-400 decoration-slate-400 line-through'}`}>{col.name}</span>
+                     </div>
+                     <div className="flex gap-1">
+                        <button 
+                           onClick={() => moveColumn(idx, 'up')}
+                           disabled={idx === 0}
+                           className="p-1 text-gray-400 hover:text-brand-600 hover:bg-gray-100 rounded disabled:opacity-30"
+                        >
+                           <MoveUp className="w-4 h-4" />
+                        </button>
+                        <button 
+                           onClick={() => moveColumn(idx, 'down')}
+                           disabled={idx === columnSettings.length - 1}
+                           className="p-1 text-gray-400 hover:text-brand-600 hover:bg-gray-100 rounded disabled:opacity-30"
+                        >
+                           <MoveDown className="w-4 h-4" />
+                        </button>
+                     </div>
+                  </div>
+               ))}
+            </div>
+            <div className="p-3 border-t border-gray-100 bg-gray-50 rounded-b-2xl text-center">
+               <button 
+                  onClick={() => setShowColSettingsModal(false)}
+                  className="text-xs font-bold text-brand-600 hover:underline"
+               >
+                  Tutup Pengaturan
+               </button>
+            </div>
+         </div>
+      )}
 
       {/* === SQL MODE INTERFACE === */}
       {sqlMode ? (
@@ -452,7 +549,7 @@ export const DataExplorer: React.FC = () => {
                     <table className="w-full text-left text-sm whitespace-nowrap">
                       <thead className="bg-gray-50 text-gray-500 font-semibold uppercase tracking-wider text-[10px] sticky top-0 shadow-sm z-10">
                         <tr>
-                          {Object.keys(data[0]).map(key => (
+                          {renderColumns.map(key => (
                             <th key={key} onClick={() => handleSort(key)} className="px-6 py-4 border-b border-gray-100 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors select-none">
                                <div className="flex items-center gap-2">
                                  {key}
@@ -467,9 +564,9 @@ export const DataExplorer: React.FC = () => {
                       <tbody className="divide-y divide-gray-50">
                         {data.map((row, idx) => (
                           <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
-                            {Object.values(row).map((val: any, i) => (
-                              <td key={i} className="px-6 py-3 text-gray-600 max-w-xs truncate">
-                                 {val === null ? <span className="text-gray-300 italic">null</span> : String(val)}
+                            {renderColumns.map((key) => (
+                              <td key={key} className="px-6 py-3 text-gray-600 max-w-xs truncate">
+                                 {row[key] === null ? <span className="text-gray-300 italic">null</span> : String(row[key])}
                               </td>
                             ))}
                           </tr>
