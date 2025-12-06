@@ -1,0 +1,92 @@
+# Deployment Guide for Ubuntu VPS
+
+Target: /var/www/raw
+Domain: raw.abkciraya.cloud
+Port: 6002
+
+## 1. Environment Setup
+
+Access your VPS via SSH and install Node.js (if not installed):
+```bash
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+sudo npm install -g pm2
+```
+
+## 2. Project Preparation
+
+Navigate to the target directory:
+```bash
+sudo mkdir -p /var/www/raw
+sudo chown -R $USER:$USER /var/www/raw
+cd /var/www/raw
+```
+
+Copy all project files (frontend and `server/` folder) to this location.
+
+## 3. Install Dependencies & Build Frontend
+
+```bash
+# Install root dependencies (React, Vite, etc)
+npm install
+
+# Build the React frontend for production
+npm run build
+```
+
+*Note: Ensure your `package.json` includes dependencies like `express`, `mysql2`, `multer`, `csv-parser`, `cors`, `dotenv`, `jsonwebtoken`, `bcryptjs`.*
+
+## 4. Backend Setup
+
+Move into the server directory (or keep structure if root package.json handles it).
+Ensure `server/server.js` serves the static frontend build:
+
+*Add this to server/server.js before app.listen if you want to serve frontend via Express (Recommended for single port)*:
+```javascript
+app.use(express.static(path.join(__dirname, '../dist')));
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) return res.status(404).json({error: 'Not Found'});
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
+});
+```
+
+Create `.env` file in root:
+```bash
+nano .env
+```
+Paste content:
+```
+DB_HOST=agrabudi.com
+DB_USER=akbar
+DB_PASS=Ciraya@555
+DB_PORT=52306
+APP_PORT=6002
+JWT_SECRET=your_secure_random_string
+DB_NAME=your_target_database_name
+```
+
+## 5. Start with PM2
+
+```bash
+pm2 start server/server.js --name "dataflow-pro"
+pm2 save
+pm2 startup
+```
+
+## 6. Nginx Reverse Proxy (Optional but Recommended)
+
+If serving on port 80/443 pointing to 6002:
+
+```nginx
+server {
+    server_name raw.abkciraya.cloud;
+    location / {
+        proxy_pass http://localhost:6002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```

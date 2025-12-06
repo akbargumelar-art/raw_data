@@ -1,0 +1,11 @@
+sku,name,category,price,stock,warehouse_location
+PRD-001,Gaming Mouse,Electronics,45.99,150,A-12
+PRD-002,Mechanical Keyboard,Electronics,120.50,50,A-13
+PRD-003,USB-C Cable 2m,Accessories,12.99,500,B-01
+PRD-004,Monitor Stand,Furniture,35.00,75,C-05
+PRD-005,Webcam 1080p,Electronics,55.00,30,A-10
+PRD-006,Laptop Sleeve,Accessories,25.00,200,B-03
+PRD-007,Wireless Headphones,Electronics,89.99,100,A-15
+PRD-008,Desk Lamp,Furniture,22.50,60,C-02
+PRD-009,HDMI Cable,Accessories,8.99,300,B-02
+PRD-010,Ergonomic Chair,Furniture,250.00,15,D-01

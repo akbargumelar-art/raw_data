@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DataFlow Pro | Mass Data Uploader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+            },
+            colors: {
+              gray: {
+                25: '#F9FAFB',
+                50: '#F9FAFB',
+                100: '#F3F4F6',
+                200: '#E5E7EB',
+                300: '#D1D5DB',
+                400: '#9CA3AF',
+                500: '#6B7280',
+                600: '#4B5563',
+                700: '#374151',
+                800: '#1F2937',
+                900: '#111827',
+              },
+              brand: {
+                50: '#fff1f2',
+                100: '#ffe4e6',
+                200: '#fecdd3',
+                300: '#fda4af',
+                400: '#fb7185',
+                500: '#f43f5e', // Rose 500 (Soft Red)
+                600: '#e11d48',
+                700: '#be123c',
+                800: '#9f1239',
+                900: '#881337',
+              }
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "axios": "https://aistudiocdn.com/axios@^1.13.2",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4"
+  }
+}
+</script>
+</head>
+  <body class="bg-gray-50 text-gray-700 antialiased selection:bg-brand-100 selection:text-brand-900">
+    <div id="root"></div>
+  </body>
+</html>
