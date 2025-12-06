@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 import { API_URL, LOCAL_STORAGE_KEY, USE_MOCK_API } from '../constants';
 import { AuthResponse, User, UserRole, SchemaAnalysis, TableColumn } from '../types';
@@ -37,6 +36,11 @@ export const dataService = {
     if (USE_MOCK_API) return mockDataService.getDatabases();
     const response = await api.get('/data/databases');
     return response.data.databases;
+  },
+
+  createDatabase: async (databaseName: string): Promise<void> => {
+    if (USE_MOCK_API) return; // Mock not implemented for this specific action yet
+    await api.post('/data/create-database', { databaseName });
   },
 
   getTables: async (dbName: string): Promise<string[]> => {

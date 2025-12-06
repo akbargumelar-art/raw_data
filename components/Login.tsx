@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, User as UserIcon, AlertCircle, Server, Info, WifiOff, ArrowRight } from 'lucide-react';
+import { Lock, User as UserIcon, AlertCircle, Server, Info, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { authService } from '../services/api';
 import { LOCAL_STORAGE_KEY, USE_MOCK_API } from '../constants';
 import { User } from '../types';
@@ -11,6 +11,7 @@ interface LoginProps {
 export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -128,13 +129,20 @@ export const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
                 <div className="relative group">
                   <Lock className="w-5 h-5 text-gray-400 absolute left-3.5 top-3 group-focus-within:text-brand-500 transition-colors" />
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     required
-                    className="w-full pl-11 pr-4 py-2.5 bg-gray-50 text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all outline-none"
+                    className="w-full pl-11 pr-12 py-2.5 bg-gray-50 text-gray-900 placeholder-gray-400 border border-gray-200 rounded-xl focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all outline-none"
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-3 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
                 </div>
               </div>
             </div>

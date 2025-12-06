@@ -7,6 +7,7 @@ import multer from 'multer';
 import csv from 'csv-parser';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import * as XLSX from 'xlsx'; // Requires npm install xlsx
 import { fileURLToPath } from 'url';
 import db from './db.js'; // Note the .js extension is required in ESM
 
@@ -113,6 +114,22 @@ app.get('/api/data/databases', authenticateToken, async (req, res) => {
   }
 });
 
+app.post('/api/data/create-database', authenticateToken, async (req, res) => {
+  const { databaseName } = req.body;
+  if (!databaseName) return res.status(400).json({ error: 'Database name required' });
+
+  // Basic validation to prevent injection or invalid names
+  const safeName = databaseName.replace(/[^a-zA-Z0-9_]/g, '');
+  if (!safeName) return res.status(400).json({ error: 'Invalid database name' });
+
+  try {
+    await db.query(`CREATE DATABASE ${safeName}`);
+    res.json({ success: true, databaseName: safeName });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/data/tables', authenticateToken, async (req, res) => {
   const dbName = req.query.db;
   if (!dbName) return res.status(400).json({ error: 'Database parameter required' });
@@ -127,35 +144,93 @@ app.get('/api/data/tables', authenticateToken, async (req, res) => {
   }
 });
 
-// SCHEMA BUILDER: Analyze File
+// SCHEMA BUILDER: Analyze File (Smart Header Detection)
 app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'File required' });
 
-  const results = [];
-  const maxPreview = 5;
-  let headers = null;
-
-  const stream = fs.createReadStream(req.file.path)
-    .pipe(csv())
-    .on('data', (data) => {
-      if (!headers) headers = Object.keys(data);
-      if (results.length < maxPreview) {
-        results.push(data);
-      } else {
-        stream.destroy(); 
+  const ext = path.extname(req.file.originalname).toLowerCase();
+  
+  if (ext === '.xlsx' || ext === '.xls') {
+    // HANDLE EXCEL (With Smart Header Detection)
+    try {
+      const workbook = XLSX.readFile(req.file.path);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      
+      // Convert sheet to array of arrays (raw)
+      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+      
+      if (rawData.length === 0) {
+         throw new Error("Empty file");
       }
-    })
-    .on('close', () => {
-       finishAnalysis();
-    })
-    .on('error', (err) => {
-       if(!headers) res.status(500).json({error: 'Failed to parse CSV'});
-    })
-    .on('end', () => {
-       finishAnalysis();
-    });
 
-  function finishAnalysis() {
+      // SMART DETECTION: Find the row with the most non-empty columns in the first 10 rows
+      // This skips metadata/title rows often found in reports
+      let maxCols = 0;
+      let headerRowIndex = 0;
+      const limit = Math.min(rawData.length, 10);
+
+      for (let i = 0; i < limit; i++) {
+        const row = rawData[i];
+        if (Array.isArray(row)) {
+          const nonEmptyCount = row.filter(cell => cell !== '' && cell !== null && cell !== undefined).length;
+          if (nonEmptyCount > maxCols) {
+            maxCols = nonEmptyCount;
+            headerRowIndex = i;
+          }
+        }
+      }
+
+      // Re-read using the detected header row
+      // 'range' option in sheet_to_json allows skipping rows
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex });
+      
+      // Extract headers from the first valid object
+      if (jsonData.length === 0) throw new Error("No data found after header");
+      const headers = Object.keys(jsonData[0]);
+      const previewData = jsonData.slice(0, 5);
+
+      analyzeAndResponse(headers, previewData, res, req.file.path);
+
+    } catch (err) {
+      console.error("Excel Parse Error:", err);
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      res.status(500).json({ error: 'Failed to parse Excel file. Ensure it is valid.' });
+    }
+
+  } else {
+    // HANDLE CSV (Fallback to existing logic)
+    const results = [];
+    const maxPreview = 5;
+    let headers = null;
+
+    const stream = fs.createReadStream(req.file.path)
+      .pipe(csv())
+      .on('data', (data) => {
+        if (!headers) headers = Object.keys(data);
+        if (results.length < maxPreview) {
+          results.push(data);
+        } else {
+          stream.destroy(); 
+        }
+      })
+      .on('close', () => {
+         analyzeAndResponse(headers, results, res, req.file.path);
+      })
+      .on('error', (err) => {
+         if(!headers) res.status(500).json({error: 'Failed to parse CSV'});
+      })
+      .on('end', () => {
+         analyzeAndResponse(headers, results, res, req.file.path);
+      });
+  }
+
+  function analyzeAndResponse(headers, results, res, filePath) {
+    if (!headers || headers.length === 0) {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return res.status(400).json({ error: "Could not detect headers" });
+    }
+
     const columns = headers.map(header => {
       let isInt = true;
       let isFloat = true;
@@ -178,12 +253,12 @@ app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, re
       else if (isFloat) type = 'DECIMAL(10,2)';
       else if (isDate) type = 'DATE';
 
-      const isPrimaryKey = /id|sku|code/i.test(header);
+      const isPrimaryKey = /id|sku|code|no/i.test(header);
 
-      return { name: header.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase(), type, isPrimaryKey };
+      return { name: header.trim().replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase(), type, isPrimaryKey };
     });
 
-    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     res.json({ columns, previewData: results });
   }
 });
