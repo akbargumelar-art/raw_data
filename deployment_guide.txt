@@ -1,103 +1,87 @@
 
-# Deployment Guide for Ubuntu VPS (via GitHub)
+# Deployment Guide for Ubuntu VPS
 
-Target: /var/www/raw
-Domain: raw.abkciraya.cloud
-Port: 6002
-Database Host: agrabudi.com
+**Repository:** https://github.com/akbargumelar-art/raw_data.git
+**Target Path:** /var/www/raw
+**Domain:** raw.abkciraya.cloud
+**Port:** 6002
 
-## 1. Environment Setup
+## 1. Environment Setup (One-time)
 
-Access your VPS via SSH and install Node.js (if not installed):
+Access your VPS via SSH:
 ```bash
+# Update System
+sudo apt update && sudo apt upgrade -y
+
+# Install Node.js 18, Git, Nginx
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs git
+sudo apt-get install -y nodejs git nginx
+
+# Install PM2
 sudo npm install -g pm2
 ```
 
-## 2. Clone Project from GitHub
-
-Navigate to the target directory and clone your repository:
+## 2. Clone Project
 
 ```bash
+# Create directory
 sudo mkdir -p /var/www/raw
 sudo chown -R $USER:$USER /var/www/raw
 cd /var/www/raw
 
-# Replace [YOUR_REPO_URL] with your actual GitHub repository URL
-git clone [YOUR_REPO_URL] .
+# Clone your specific repository
+git clone https://github.com/akbargumelar-art/raw_data.git .
 ```
 
-## 3. Install Dependencies & Build Frontend
+## 3. Build & Install
 
 ```bash
-# Install root dependencies (React, Vite, Express, etc)
+# Install dependencies
 npm install
 
-# Build the React frontend for production
-# This creates the 'dist' folder which the Node server serves
+# Build React Frontend (Output goes to /dist)
 npm run build
 ```
 
-## 4. Backend Configuration (.env)
+## 4. Production Configuration (.env)
 
-Create a production `.env` file. This file should **NOT** be committed to GitHub for security.
-
+Create the secret environment file:
 ```bash
 nano .env
 ```
 
-Paste the following configuration:
+**PASTE THIS CONTENT:**
 ```env
-# Database Credentials (Remote)
+# Database Credentials
 DB_HOST=agrabudi.com
 DB_USER=akbar
 DB_PASS=Ciraya@555
 DB_PORT=52306
 DB_NAME=akbar
 
-# App Configuration
+# App Config
 APP_PORT=6002
-JWT_SECRET=rahasia_super_secure_ganti_ini_nanti
+JWT_SECRET=super_secret_key_change_me
 ```
-*Press Ctrl+X, then Y, then Enter to save.*
 
-## 5. Initialize Database (First Time Only)
-
-Run the server once to verify connection and create the initial Admin user.
+## 5. Start Application
 
 ```bash
-node server/server.js
-```
-*Expected Output:*
-> 🚀 Server running on http://localhost:6002
-> ✅ Database connected successfully...
-> ✅ System Initialized: Default admin user created...
-
-*Press Ctrl+C to stop.*
-
-## 6. Start Application with PM2
-
-Use PM2 to keep the application running in the background.
-
-```bash
-# Start the server
+# Start with PM2
 pm2 start server/server.js --name "dataflow-pro"
 
-# Save the process list so it restarts on reboot
+# Ensure it restarts on reboot
 pm2 save
 pm2 startup
 ```
 
-## 7. Nginx Reverse Proxy Setup
-
-Configure Nginx to forward traffic from `raw.abkciraya.cloud` to port `6002`.
+## 6. Nginx Configuration
 
 ```bash
 sudo nano /etc/nginx/sites-available/raw.abkciraya.cloud
 ```
 
-Paste configuration:
+**PASTE THIS CONTENT:**
 ```nginx
 server {
     listen 80;
@@ -114,27 +98,23 @@ server {
 }
 ```
 
-Enable the site and restart Nginx:
+**ACTIVATE:**
 ```bash
 sudo ln -s /etc/nginx/sites-available/raw.abkciraya.cloud /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-## 8. SSL Certificate (Certbot)
-
-Secure your domain with HTTPS:
+## 7. SSL Certificate
 
 ```bash
-sudo apt install certbot python3-certbot-nginx
+sudo apt install certbot python3-certbot-nginx -y
 sudo certbot --nginx -d raw.abkciraya.cloud
 ```
 
----
+## Updating the App (Future)
 
-### Update Procedure (Future Updates)
-
-To update the app later:
+When you push changes to GitHub, run this on VPS:
 ```bash
 cd /var/www/raw
 git pull origin main
