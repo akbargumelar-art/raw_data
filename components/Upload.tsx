@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Upload as UploadIcon, FileSpreadsheet, AlertTriangle, CheckCircle, RefreshCw, Database, Table as TableIcon, ArrowRight, Server, ChevronRight } from 'lucide-react';
+import { Upload as UploadIcon, FileSpreadsheet, AlertTriangle, CheckCircle, RefreshCw, Database, Table as TableIcon, ArrowRight, Server, ChevronRight, Clock } from 'lucide-react';
 import { dataService } from '../services/api';
 import { UploadStatus } from '../types';
 
@@ -16,6 +16,7 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
   const [selectedTable, setSelectedTable] = useState('');
   const [status, setStatus] = useState<UploadStatus>({ status: 'idle', progress: 0 });
   const [loadingTables, setLoadingTables] = useState(false);
+  const [uploadStats, setUploadStats] = useState<{processed: number, changed: number} | null>(null);
   
   useEffect(() => {
     dataService.getDatabases()
@@ -62,6 +63,7 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
     if (e.target.files && e.target.files[0]) {
       setFile(e.target.files[0]);
       setStatus({ status: 'idle', progress: 0 });
+      setUploadStats(null);
     }
   };
 
@@ -69,6 +71,7 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
     if (!file || !selectedTable || !selectedDB) return;
 
     setStatus({ status: 'uploading', progress: 0, message: 'Membaca file & menyiapkan batch...' });
+    setUploadStats(null);
 
     try {
       const result = await dataService.uploadFile(file, selectedDB, selectedTable, (progressEvent) => {
@@ -80,10 +83,11 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
         }));
       });
 
+      setUploadStats({ processed: result.rowsProcessed, changed: result.changes });
       setStatus({ 
         status: 'success', 
         progress: 100, 
-        message: `Sukses! Berhasil memproses ${result.rowsProcessed} baris data.` 
+        message: 'Upload Selesai'
       });
       setFile(null);
     } catch (error: any) {
@@ -95,6 +99,14 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
         message: errorMsg 
       });
     }
+  };
+
+  const getCurrentTimeWIB = () => {
+    return new Date().toLocaleString('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      dateStyle: 'full',
+      timeStyle: 'medium'
+    }) + ' WIB';
   };
 
   return (
@@ -247,7 +259,7 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
                           status.status === 'success' ? 'text-green-600' : 'text-brand-600'
                         }`}>
                           {status.status === 'uploading' ? 'Memproses Data...' : 
-                          status.status === 'success' ? 'Selesai' : 'Gagal'}
+                          status.status === 'success' ? 'Upload Selesai' : 'Gagal'}
                         </span>
                         <span className="text-gray-400 text-[10px] font-mono bg-gray-100 px-2 py-0.5 rounded">{status.progress}%</span>
                     </div>
@@ -266,15 +278,34 @@ export const Upload: React.FC<UploadProps> = ({ setIsLocked }) => {
                       </div>
                     </div>
 
-                    {status.message && (
-                      <div className={`mt-4 p-3 rounded-lg flex items-start gap-2 text-xs border shadow-sm ${
-                        status.status === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 
-                        status.status === 'success' ? 'bg-green-50 text-green-700 border-green-100' : 
-                        'bg-brand-50 text-brand-700 border-brand-100'
-                      }`}>
-                          {status.status === 'error' && <AlertTriangle className="w-4 h-4 shrink-0" />}
-                          {status.status === 'success' && <CheckCircle className="w-4 h-4 shrink-0" />}
-                          {status.status === 'uploading' && <RefreshCw className="w-4 h-4 shrink-0 animate-spin" />}
+                    {status.status === 'success' && uploadStats && (
+                       <div className="mt-4 p-4 bg-green-50 border border-green-100 rounded-xl space-y-2">
+                          <div className="flex items-center gap-2 text-green-700 font-bold text-sm">
+                             <CheckCircle className="w-4 h-4" /> Sukses!
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mt-2">
+                             <div className="bg-white p-2 rounded border border-green-100">
+                                <span className="block text-[10px] uppercase text-gray-400">Total Data File</span>
+                                <span className="font-bold text-gray-900 text-base">{uploadStats.processed}</span>
+                             </div>
+                             <div className="bg-white p-2 rounded border border-green-100">
+                                <span className="block text-[10px] uppercase text-gray-400">Respon Database</span>
+                                {/* MySQL affectedRows: 1=Insert, 2=Update. This helps user visualize activity */}
+                                <span className="font-bold text-gray-900 text-base">{uploadStats.changed}</span>
+                             </div>
+                          </div>
+                          <div className="text-[10px] text-gray-400 flex items-center gap-1 mt-2 border-t border-green-100 pt-2">
+                             <Clock className="w-3 h-3" /> {getCurrentTimeWIB()}
+                          </div>
+                          <p className="text-[10px] text-gray-500 italic mt-1">
+                             *Info: Respon Database menghitung aktifitas Insert (1 poin) dan Update (2 poin). Jika 0, data sudah ada dan sama persis.
+                          </p>
+                       </div>
+                    )}
+
+                    {status.status === 'error' && (
+                      <div className="mt-4 p-3 rounded-lg flex items-start gap-2 text-xs border shadow-sm bg-red-50 text-red-700 border-red-200">
+                          <AlertTriangle className="w-4 h-4 shrink-0" />
                           <span className="leading-relaxed font-medium">{status.message}</span>
                       </div>
                     )}

@@ -39,7 +39,7 @@ export const dataService = {
   },
 
   createDatabase: async (databaseName: string): Promise<void> => {
-    if (USE_MOCK_API) return; // Mock not implemented for this specific action yet
+    if (USE_MOCK_API) return; 
     await api.post('/data/create-database', { databaseName });
   },
 
@@ -49,30 +49,63 @@ export const dataService = {
     return response.data.tables;
   },
 
-  // NEW: Get columns and types of an existing table
   getTableSchema: async (dbName: string, tableName: string): Promise<TableColumn[]> => {
     if (USE_MOCK_API) return []; 
     const response = await api.get(`/data/table-schema?db=${dbName}&table=${tableName}`);
     return response.data;
   },
 
-  // NEW: Alter column type
   alterTableColumn: async (dbName: string, tableName: string, columnName: string, newType: string): Promise<void> => {
     if (USE_MOCK_API) return;
     await api.post('/data/alter-table', { databaseName: dbName, tableName, columnName, newType });
   },
 
-  // NEW: Get Table Summary Stats
   getTableStats: async (dbName: string, tableName: string): Promise<TableStats> => {
     if (USE_MOCK_API) return { rows: 0, dataLength: 0, indexLength: 0, createdAt: null, collation: '' };
     const response = await api.get(`/data/table-stats?db=${dbName}&table=${tableName}`);
     return response.data;
   },
 
-  // NEW: Get Actual Data (Paginated)
-  getTableData: async (dbName: string, tableName: string, page: number = 1, limit: number = 20): Promise<{data: any[], total: number}> => {
+  // UPDATED: Support Sorting
+  getTableData: async (
+    dbName: string, 
+    tableName: string, 
+    page: number = 1, 
+    limit: number = 20,
+    sortColumn?: string,
+    sortDirection?: 'asc' | 'desc'
+  ): Promise<{data: any[], total: number}> => {
     if (USE_MOCK_API) return { data: [], total: 0 };
-    const response = await api.get(`/data/preview?db=${dbName}&table=${tableName}&page=${page}&limit=${limit}`);
+    
+    let url = `/data/preview?db=${dbName}&table=${tableName}&page=${page}&limit=${limit}`;
+    if (sortColumn) {
+      url += `&sort=${sortColumn}&dir=${sortDirection || 'asc'}`;
+    }
+    
+    const response = await api.get(url);
+    return response.data;
+  },
+
+  // NEW: Download Excel
+  exportTable: async (dbName: string, tableName: string) => {
+    if (USE_MOCK_API) return;
+    const response = await api.get(`/data/export?db=${dbName}&table=${tableName}`, {
+      responseType: 'blob' 
+    });
+    
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${tableName}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
+
+  // NEW: Run Raw SQL Query
+  runQuery: async (databaseName: string, query: string): Promise<any[]> => {
+    if (USE_MOCK_API) return [];
+    const response = await api.post('/data/query', { databaseName, query });
     return response.data;
   },
 
@@ -108,7 +141,7 @@ export const dataService = {
     const response = await api.post('/data/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress,
-      timeout: 600000 // 10 minutes timeout
+      timeout: 600000 
     });
     return response.data;
   }

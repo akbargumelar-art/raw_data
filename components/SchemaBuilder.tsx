@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { dataService } from '../services/api';
 import { TableColumn } from '../types';
-import { FileSearch, Database, ArrowRight, Table, Check, AlertCircle, RefreshCw, Plus, X, Pencil, Save, List } from 'lucide-react';
+import { FileSearch, Database, ArrowRight, Table, Check, AlertCircle, RefreshCw, Plus, X, Pencil, Save, List, Info } from 'lucide-react';
 
 export const SchemaBuilder: React.FC = () => {
   // Tabs
@@ -287,6 +287,19 @@ export const SchemaBuilder: React.FC = () => {
                 </div>
               </div>
 
+              {/* INFO BOX FOR COMPOSITE KEYS */}
+              <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6 flex gap-3 text-sm text-blue-700">
+                 <Info className="w-5 h-5 shrink-0" />
+                 <div>
+                    <span className="font-bold">Tips Kunci Unik (Primary Key):</span>
+                    <p className="mt-1 text-xs leading-relaxed opacity-90">
+                       Anda bisa mencentang lebih dari satu kolom sebagai Primary Key (Composite Key). 
+                       Ini berguna jika data unik ditentukan oleh kombinasi beberapa kolom (Misal: Tanggal + No HP + Nominal).
+                       Jika data yang diupload memiliki kombinasi yang sama, data lama akan ditimpa (Update).
+                    </p>
+                 </div>
+              </div>
+
               <div className="rounded-2xl border border-gray-200 overflow-hidden mb-8">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-gray-50 text-gray-500 font-semibold uppercase tracking-wider text-xs">
@@ -329,14 +342,12 @@ export const SchemaBuilder: React.FC = () => {
                             type="checkbox" 
                             checked={col.isPrimaryKey || false}
                             onChange={e => {
-                              if(e.target.checked) {
-                                const newCols = createColumns.map((c, i) => ({...c, isPrimaryKey: i === idx}));
-                                setCreateColumns(newCols);
-                              } else {
-                                handleColumnChange(idx, 'isPrimaryKey', false);
-                              }
+                              // Allow multiple check for composite key
+                              const newCols = [...createColumns];
+                              newCols[idx].isPrimaryKey = e.target.checked;
+                              setCreateColumns(newCols);
                             }}
-                            className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500"
+                            className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500 cursor-pointer"
                           />
                         </td>
                         <td className="px-6 py-3 text-gray-400 italic text-xs">
