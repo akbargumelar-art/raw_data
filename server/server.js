@@ -28,6 +28,49 @@ app.use(express.static(path.join(__dirname, '../dist')));
 
 const SECRET_KEY = process.env.JWT_SECRET || 'super_secret_key_123';
 
+// --- HELPER FUNCTION: FORMAT DATE FOR MYSQL ---
+const formatToMysql = (val) => {
+  if (val === null || val === undefined || val === '') return null;
+
+  // 1. Handle JS Date objects (from Excel with cellDates: true)
+  if (val instanceof Date) {
+     if (isNaN(val.getTime())) return null;
+     const y = val.getFullYear();
+     const m = String(val.getMonth() + 1).padStart(2, '0');
+     const d = String(val.getDate()).padStart(2, '0');
+     const h = String(val.getHours()).padStart(2, '0');
+     const min = String(val.getMinutes()).padStart(2, '0');
+     const s = String(val.getSeconds()).padStart(2, '0');
+     return `${y}-${m}-${d} ${h}:${min}:${s}`;
+  }
+
+  // 2. Handle Strings
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    
+    // Skip if it looks like a standard number (and not a date like 2023)
+    // But be careful, some IDs look like dates. We prioritize DD/MM/YYYY pattern.
+
+    // Regex for DD/MM/YYYY or DD-MM-YYYY (Indonesian/Common format)
+    // Matches: 31/12/2024 or 31-12-2024, optional time 12:00:00
+    const dmy = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+    if (dmy) {
+       const [_, d, m, y, h, min, s] = dmy;
+       return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')} ${h ? h.padStart(2, '0') : '00'}:${min ? min.padStart(2, '0') : '00'}:${s ? s.padStart(2, '0') : '00'}`;
+    }
+
+    // Check if it is already YYYY-MM-DD (MySQL format)
+    // Matches: 2024-12-31 or 2024/12/31
+    const ymd = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:\s(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+    if (ymd) {
+        const [_, y, m, d, h, min, s] = ymd;
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')} ${h ? h.padStart(2, '0') : '00'}:${min ? min.padStart(2, '0') : '00'}:${s ? s.padStart(2, '0') : '00'}`;
+    }
+  }
+
+  return val;
+};
+
 // --- AUTH & ADMIN ---
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -321,7 +364,8 @@ app.post('/api/data/alter-table', authenticateToken, requireAdmin, async (req, r
 });
 
 function getExcelDataWithSmartHeader(filePath) {
-  const workbook = XLSX.readFile(filePath);
+  // CRITICAL: cellDates: true allows XLSX to parse date cells as Date objects
+  const workbook = XLSX.readFile(filePath, { cellDates: true });
   const worksheet = workbook.Sheets[workbook.SheetNames[0]];
   const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
   if (rawData.length === 0) throw new Error("File kosong.");
@@ -331,7 +375,7 @@ function getExcelDataWithSmartHeader(filePath) {
     const nonEmpty = rawData[i].filter(c => c !== '' && c != null).length;
     if (nonEmpty > maxCols) { maxCols = nonEmpty; headerRowIndex = i; }
   }
-  return XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex });
+  return XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex, defval: '' });
 }
 
 app.post('/api/data/analyze', authenticateToken, upload.single('file'), (req, res) => {
@@ -423,7 +467,9 @@ app.post('/api/data/upload', authenticateToken, upload.single('file'), async (re
     if (batchData.length === 0) return;
     const cols = Object.keys(batchData[0]);
     const safeCols = cols.map(c => c.trim().replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase());
-    const values = batchData.map(row => cols.map(c => row[c]));
+    
+    // UPDATED: Apply formatToMysql on values to fix date issues
+    const values = batchData.map(row => cols.map(c => formatToMysql(row[c])));
     
     const escapedCols = safeCols.map(c => db.escapeId(c));
     
