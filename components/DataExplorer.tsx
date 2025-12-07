@@ -207,14 +207,13 @@ export const DataExplorer: React.FC = () => {
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return '-';
+    const str = String(dateString);
+    if (str.startsWith('0000-00-00')) return '-'; // Handle invalid/zero dates
     
     // If it's a raw string from MySQL with dateStrings: true (e.g. "2025-12-07 06:54:00")
-    // We parse it manually to avoid browser timezone conversion shenanigans.
-    if (typeof dateString === 'string' && dateString.includes(' ') && dateString.includes(':')) {
-      // Expecting "YYYY-MM-DD HH:mm:ss"
+    if (str.includes(' ') && str.includes(':')) {
       try {
-         // Check if it matches MySQL datetime format
-         const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})$/);
+         const match = str.match(/^(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})$/);
          if (match) {
             const [_, year, month, day, hour, minute] = match;
             const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
@@ -224,21 +223,58 @@ export const DataExplorer: React.FC = () => {
                return `${day} ${monthNames[mIndex]} ${year}, ${hour}.${minute} WIB`;
             }
          }
-      } catch (e) {
-          // Fallback if regex parsing fails
-      }
+      } catch (e) { }
     }
 
-    // Fallback for standard ISO strings or if manual parsing fails
-    return new Date(dateString).toLocaleDateString('id-ID', {
-      timeZone: 'Asia/Jakarta',
-      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-    }) + ' WIB';
+    // Fallback
+    try {
+        return new Date(dateString).toLocaleDateString('id-ID', {
+            timeZone: 'Asia/Jakarta',
+            day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+        }) + ' WIB';
+    } catch (e) {
+        return str;
+    }
+  };
+
+  // Helper to render cell content based on type
+  const renderCell = (key: string, value: any) => {
+    if (value === null || value === undefined) return <span className="text-gray-300">-</span>;
+
+    // 1. Check if it is a Zero Date string
+    const strVal = String(value);
+    if (strVal.startsWith('0000-00-00')) return <span className="text-gray-300">-</span>;
+
+    // 2. Check Schema Type
+    const colDef = schema.find(c => c.name === key);
+    if (colDef) {
+        const type = colDef.type.toUpperCase();
+        
+        // Date Handling
+        if (type.includes('DATE') || type.includes('TIME') || type.includes('TIMESTAMP')) {
+            return <span className="whitespace-nowrap">{formatDate(strVal)}</span>;
+        }
+
+        // Numeric Handling (Format 1000 -> 1.000)
+        // Exclude IDs (usually Primary Keys or ending in _id) unless specifically wanted
+        if ((type.includes('INT') || type.includes('DECIMAL') || type.includes('FLOAT') || type.includes('DOUBLE')) && !type.includes('CHAR')) {
+            // Check if it's likely an ID (simple heuristic)
+            if (colDef.isPrimaryKey || key.toLowerCase().endsWith('_id') || key.toLowerCase() === 'id' || key.toLowerCase() === 'no') {
+               return strVal; // Don't format IDs
+            }
+            
+            const num = Number(value);
+            if (!isNaN(num)) {
+               return num.toLocaleString('id-ID');
+            }
+        }
+    }
+
+    return strVal;
   };
 
   // Determine actual visible columns to render
   const visibleColumns = columnSettings.filter(c => c.visible).map(c => c.name);
-  // Fallback if settings are empty (e.g. initial load glitch)
   const renderColumns = visibleColumns.length > 0 ? visibleColumns : (data.length > 0 ? Object.keys(data[0]) : []);
 
   return (
@@ -589,7 +625,7 @@ export const DataExplorer: React.FC = () => {
                           <tr key={idx} className="hover:bg-gray-50/80 transition-colors">
                             {renderColumns.map((key) => (
                               <td key={key} className="px-6 py-3 text-gray-600 max-w-xs truncate">
-                                 {row[key] === null ? <span className="text-gray-300 italic">null</span> : String(row[key])}
+                                 {renderCell(key, row[key])}
                               </td>
                             ))}
                           </tr>
