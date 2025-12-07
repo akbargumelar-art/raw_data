@@ -40,8 +40,10 @@ export interface SchemaAnalysis {
 
 export interface TableStats {
   rows: number;
+  isEstimated?: boolean; // New: If true, rows is an approximation
   dataLength: number; // in bytes
   indexLength: number; // in bytes
   createdAt: string | null;
+  updatedAt?: string | null;
   collation: string;
 }

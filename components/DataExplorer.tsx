@@ -9,13 +9,7 @@ export const DataExplorer: React.FC = () => {
   const [tables, setTables] = useState<string[]>([]);
   const [selectedTable, setSelectedTable] = useState('');
 
-  const [stats, setStats] = useState<{
-    rows: number;
-    dataLength: number;
-    indexLength: number;
-    createdAt: string | null;
-    updatedAt?: string | null;
-  } | null>(null);
+  const [stats, setStats] = useState<TableStats | null>(null);
 
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -589,7 +583,13 @@ export const DataExplorer: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
                   <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Server className="w-6 h-6" /></div>
-                  <div><p className="text-xs text-gray-400 font-bold">Total Baris</p><p className="text-2xl font-bold">{stats ? stats.rows.toLocaleString('id-ID') : '-'}</p></div>
+                  <div>
+                    <p className="text-xs text-gray-400 font-bold">Total Baris</p>
+                    <p className="text-2xl font-bold flex items-center gap-1">
+                        {stats?.isEstimated && <span className="text-brand-500" title="Estimasi Cepat (Data Besar)">~</span>}
+                        {stats ? stats.rows.toLocaleString('id-ID') : '-'}
+                    </p>
+                  </div>
                </div>
                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4">
                   <div className="p-3 bg-purple-50 text-purple-600 rounded-xl"><HardDrive className="w-6 h-6" /></div>

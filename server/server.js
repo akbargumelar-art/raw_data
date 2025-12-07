@@ -196,29 +196,48 @@ app.get('/api/data/table-stats', authenticateToken, async (req, res) => {
     const { role, allowed } = await getUserAllowedDatabases(req.user.id);
     if (role !== 'admin' && !allowed.includes(dbName)) return res.status(403).json({ error: 'Akses ditolak.' });
 
-    const fullTable = `${db.escapeId(dbName)}.${db.escapeId(tableName)}`;
-    const [countRows] = await db.query(`SELECT COUNT(*) as total FROM ${fullTable}`);
-    
-    // Get Metadata (Size, Create Time, Update Time) from Information Schema
+    // 1. Get Metadata first from Information Schema
+    // This is instant even for millions of rows
     const [meta] = await db.query(`
       SELECT 
-        DATA_LENGTH, INDEX_LENGTH, CREATE_TIME, UPDATE_TIME, TABLE_COLLATION 
+        TABLE_ROWS, DATA_LENGTH, INDEX_LENGTH, CREATE_TIME, UPDATE_TIME, TABLE_COLLATION 
       FROM information_schema.TABLES 
       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
     `, [dbName, tableName]);
 
     if (meta.length === 0) return res.status(404).json({ error: 'Tabel tidak ditemukan' });
     const info = meta[0];
+    
+    let totalRows = info.TABLE_ROWS || 0;
+    let isEstimated = false;
+
+    // 2. Smart Counting Strategy
+    // If rows in metadata < 100,000, perform exact count (SELECT COUNT(*)). 
+    // If larger, use the estimate to avoid 10-20s load times on massive tables.
+    const THRESHOLD = 100000;
+    
+    if (totalRows < THRESHOLD) {
+        const fullTable = `${db.escapeId(dbName)}.${db.escapeId(tableName)}`;
+        const [countRows] = await db.query(`SELECT COUNT(*) as total FROM ${fullTable}`);
+        totalRows = countRows[0].total;
+        isEstimated = false;
+    } else {
+        isEstimated = true;
+    }
 
     res.json({
-      rows: countRows[0].total,
+      rows: totalRows,
+      isEstimated: isEstimated,
       dataLength: info.DATA_LENGTH,
       indexLength: info.INDEX_LENGTH,
       createdAt: info.CREATE_TIME,
       updatedAt: info.UPDATE_TIME, 
       collation: info.TABLE_COLLATION
     });
-  } catch (err) { res.status(500).json({ error: 'Gagal memuat statistik.' }); }
+  } catch (err) { 
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat statistik.' }); 
+  }
 });
 
 app.get('/api/data/preview', authenticateToken, async (req, res) => {
