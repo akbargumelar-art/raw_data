@@ -207,6 +207,29 @@ export const DataExplorer: React.FC = () => {
 
   const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return '-';
+    
+    // If it's a raw string from MySQL with dateStrings: true (e.g. "2025-12-07 06:54:00")
+    // We parse it manually to avoid browser timezone conversion shenanigans.
+    if (typeof dateString === 'string' && dateString.includes(' ') && dateString.includes(':')) {
+      // Expecting "YYYY-MM-DD HH:mm:ss"
+      try {
+         // Check if it matches MySQL datetime format
+         const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})\s(\d{2}):(\d{2}):(\d{2})$/);
+         if (match) {
+            const [_, year, month, day, hour, minute] = match;
+            const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Ags", "Sep", "Okt", "Nov", "Des"];
+            const mIndex = parseInt(month) - 1;
+            
+            if (mIndex >= 0 && mIndex < 12) {
+               return `${day} ${monthNames[mIndex]} ${year}, ${hour}.${minute} WIB`;
+            }
+         }
+      } catch (e) {
+          // Fallback if regex parsing fails
+      }
+    }
+
+    // Fallback for standard ISO strings or if manual parsing fails
     return new Date(dateString).toLocaleDateString('id-ID', {
       timeZone: 'Asia/Jakarta',
       day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
@@ -591,4 +614,4 @@ export const DataExplorer: React.FC = () => {
 
     </div>
   );
-};
+}

@@ -13,7 +13,8 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0,
   supportBigNumbers: true, // Required for COUNT(*) and BIGINT columns
-  bigNumberStrings: true   // Return BIGINT as string to prevent JSON crashes
+  bigNumberStrings: true,   // Return BIGINT as string to prevent JSON crashes
+  dateStrings: true // Force date columns to be returned as strings (YYYY-MM-DD HH:mm:ss)
 });
 
 const promisePool = pool.promise();
