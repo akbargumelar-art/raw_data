@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { dataService } from '../services/api';
 import { TableStats, TableColumn } from '../types';
 import { Database, Table as TableIcon, Server, Search, ChevronRight, ChevronLeft, HardDrive, Calendar, RefreshCw, Download, ArrowUpDown, ArrowUp, ArrowDown, Code, Play, Filter, X, Settings, Eye, EyeOff, MoveUp, MoveDown, RotateCcw } from 'lucide-react';
@@ -45,14 +45,17 @@ export const DataExplorer: React.FC = () => {
   const [executingSql, setExecutingSql] = useState(false);
   const [sqlError, setSqlError] = useState('');
 
-  // Load Databases on Mount
+  // Ref to track if it's the initial table load to avoid double fetching
+  const isInitialLoad = useRef(false);
+
+  // 1. Load Databases on Mount
   useEffect(() => {
     dataService.getDatabases()
       .then(setDatabases)
       .catch(console.error);
   }, []);
 
-  // Load Tables when DB changes
+  // 2. Load Tables when DB changes
   useEffect(() => {
     if (selectedDB) {
       setTables([]);
@@ -60,64 +63,93 @@ export const DataExplorer: React.FC = () => {
       setStats(null);
       setData([]);
       setSchema([]);
-      setColumnSettings([]); // Reset columns
+      setColumnSettings([]); 
       dataService.getTables(selectedDB)
         .then(setTables)
         .catch(console.error);
     }
   }, [selectedDB]);
 
-  // Load Schema to find Date Columns & Init Column Settings
-  useEffect(() => {
-    if (selectedDB && selectedTable) {
-      // Reset filters
-      setDateColumn('');
-      setStartDate('');
-      setEndDate('');
-      setSearchQuery('');
-      setActiveSearch('');
-      setPage(1);
-
-      dataService.getTableSchema(selectedDB, selectedTable)
-        .then(cols => {
-           setSchema(cols);
-           // Initialize Column Settings (All visible by default)
-           setColumnSettings(cols.map(c => ({ name: c.name, visible: true })));
-
-           // Auto-select first date column if exists
-           const dateCol = cols.find(c => c.type.includes('DATE') || c.type.includes('TIME'));
-           if (dateCol) {
-             setDateColumn(dateCol.name);
-             // Default sort by latest date
-             if (!sortConfig) {
-                setSortConfig({ key: dateCol.name, direction: 'desc' });
-             }
-           }
-        })
-        .catch(console.error);
-    }
-  }, [selectedTable, selectedDB]);
-
-  // Load Stats & Data
+  // 3. MAIN EFFECT: Handle Table Change (Fetch Schema -> Then Data)
   useEffect(() => {
     if (selectedDB && selectedTable && !sqlMode) {
-      fetchData();
+      loadTableContext();
     }
-  }, [selectedDB, selectedTable, page, sortConfig, activeSearch, sqlMode]); 
+  }, [selectedDB, selectedTable, sqlMode]);
 
-  // Filter fetch trigger
-  useEffect(() => {
-     if(selectedDB && selectedTable && !sqlMode && startDate && endDate && dateColumn) {
-        setPage(1); // Reset to page 1 on filter
-        fetchData();
-     }
-  }, [startDate, endDate, dateColumn]);
-
-  const fetchData = () => {
+  const loadTableContext = async () => {
+    // START LOADING ANIMATION IMMEDIATELY
     setLoading(true);
-    dataService.getTableStats(selectedDB, selectedTable)
-      .then(res => setStats(res as any)) 
-      .catch(console.error);
+    setData([]); // Clear old data to prevent "strip" / stale view
+    setStats(null);
+    setSchema([]); // Clear schema to prevent mismatches
+    
+    // Reset Filters & Page
+    setPage(1);
+    setSearchQuery('');
+    setActiveSearch('');
+    setDateColumn('');
+    setStartDate('');
+    setEndDate('');
+    setSortConfig(null);
+    
+    isInitialLoad.current = true;
+
+    try {
+      // A. Fetch Schema & Stats in Parallel
+      const [cols, statsRes] = await Promise.all([
+         dataService.getTableSchema(selectedDB, selectedTable),
+         dataService.getTableStats(selectedDB, selectedTable)
+      ]);
+
+      setSchema(cols);
+      setStats(statsRes);
+      
+      // Initialize Columns
+      setColumnSettings(cols.map(c => ({ name: c.name, visible: true })));
+
+      // Auto-detect Date Column
+      let defaultSort = null;
+      const dateCol = cols.find(c => c.type.includes('DATE') || c.type.includes('TIME') || c.type.includes('TIMESTAMP'));
+      if (dateCol) {
+        setDateColumn(dateCol.name);
+        defaultSort = { key: dateCol.name, direction: 'desc' as const };
+        setSortConfig(defaultSort);
+      }
+
+      // B. Fetch Initial Data (Page 1)
+      // We pass the new sort config explicitly because state update might be async
+      const dataRes = await dataService.getTableData(
+        selectedDB, 
+        selectedTable, 
+        1, 
+        15, 
+        defaultSort?.key, 
+        defaultSort?.direction,
+        ''
+      );
+      
+      setData(dataRes.data || []);
+      
+    } catch (err) {
+      console.error("Failed to load table context:", err);
+    } finally {
+      setLoading(false);
+      setTimeout(() => { isInitialLoad.current = false; }, 500);
+    }
+  };
+
+  // 4. SECONDARY EFFECT: Handle Pagination, Sorting, Searching (Updates ONLY)
+  useEffect(() => {
+     // Only run this if we are NOT in the middle of a full table switch (isInitialLoad)
+     // and if schema is loaded.
+     if (selectedDB && selectedTable && !sqlMode && schema.length > 0 && !isInitialLoad.current) {
+        fetchDataOnly();
+     }
+  }, [page, sortConfig, activeSearch, startDate, endDate]); // Removed selectedDB/Table to avoid conflict
+
+  const fetchDataOnly = () => {
+    setLoading(true);
     
     dataService.getTableData(
       selectedDB, 
@@ -138,6 +170,8 @@ export const DataExplorer: React.FC = () => {
       setLoading(false);
     });
   };
+
+  // --- Handlers ---
 
   const handleSort = (key: string) => {
     let direction: 'asc' | 'desc' = 'asc';
@@ -194,7 +228,7 @@ export const DataExplorer: React.FC = () => {
     setActiveSearch('');
     setStartDate('');
     setEndDate('');
-    fetchData();
+    // Triggered via effect
   };
 
   const formatBytes = (bytes: number) => {
@@ -593,8 +627,8 @@ export const DataExplorer: React.FC = () => {
                <div className="flex-1 overflow-x-auto custom-scrollbar max-h-[500px]">
                   {loading ? (
                      <div className="flex flex-col items-center justify-center h-64 text-gray-400 gap-3">
-                        <RefreshCw className="w-8 h-8 animate-spin text-brand-200" />
-                        <span className="text-xs font-medium">Memuat data...</span>
+                        <RefreshCw className="w-8 h-8 animate-spin text-brand-500" />
+                        <span className="text-xs font-medium animate-pulse">Sedang memuat data tabel...</span>
                      </div>
                   ) : data.length === 0 ? (
                      <div className="flex flex-col items-center justify-center h-64 text-gray-300">
