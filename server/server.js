@@ -379,9 +379,15 @@ app.post('/api/data/query', authenticateToken, requireAdmin, async (req, res) =>
   }
 });
 
-app.get('/api/data/table-schema', authenticateToken, requireAdmin, async (req, res) => {
+// UPDATED: Allow operators to view schema if they have DB access
+// Previously this was requireAdmin only, causing DataExplorer to fail for operators
+app.get('/api/data/table-schema', authenticateToken, async (req, res) => {
   const { db: dbName, table: tableName } = req.query;
   try {
+    // Permission Check: Ensure Operator has access to this DB
+    const { role, allowed } = await getUserAllowedDatabases(req.user.id);
+    if (role !== 'admin' && !allowed.includes(dbName)) return res.status(403).json({ error: 'Akses ditolak.' });
+
     const [columns] = await db.query(`DESCRIBE ${db.escapeId(dbName)}.${db.escapeId(tableName)}`);
     res.json(columns.map(c => ({ name: c.Field, type: c.Type.toUpperCase(), isPrimaryKey: c.Key === 'PRI' })));
   } catch (err) { res.status(500).json({ error: 'Gagal.' }); }
