@@ -48,23 +48,48 @@ const formatToMysql = (val) => {
   if (typeof val === 'string') {
     const trimmed = val.trim();
     
-    // Skip if it looks like a standard number (and not a date like 2023)
-    // But be careful, some IDs look like dates. We prioritize DD/MM/YYYY pattern.
-
-    // Regex for DD/MM/YYYY or DD-MM-YYYY (Indonesian/Common format)
-    // Matches: 31/12/2024 or 31-12-2024, optional time 12:00:00
+    // A. DD/MM/YYYY or DD-MM-YYYY (Numeric)
+    // Matches: 31/12/2024 10:00:00 or 31-12-2024
     const dmy = trimmed.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\s(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
     if (dmy) {
        const [_, d, m, y, h, min, s] = dmy;
        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')} ${h ? h.padStart(2, '0') : '00'}:${min ? min.padStart(2, '0') : '00'}:${s ? s.padStart(2, '0') : '00'}`;
     }
 
-    // Check if it is already YYYY-MM-DD (MySQL format)
-    // Matches: 2024-12-31 or 2024/12/31
+    // B. YYYY-MM-DD (Standard MySQL)
+    // Matches: 2024-12-31 10:00:00
     const ymd = trimmed.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:\s(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
     if (ymd) {
         const [_, y, m, d, h, min, s] = ymd;
         return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')} ${h ? h.padStart(2, '0') : '00'}:${min ? min.padStart(2, '0') : '00'}:${s ? s.padStart(2, '0') : '00'}`;
+    }
+
+    // C. DD-MMM-YY or DD-MMM-YYYY (Text Month e.g. 04-DEC-25)
+    // Matches: 04-DEC-25 09:59:32 or 04-Dec-2025
+    const dMonY = trimmed.match(/^(\d{1,2})[\/\-]([a-zA-Z]{3})[\/\-](\d{2,4})(?:\s(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+    if (dMonY) {
+        const [_, d, monStr, yStr, h, min, s] = dMonY;
+        
+        const MONTH_MAP = {
+          jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+          jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+          // Indonesian / Alternative Variants
+          mei: '05', ags: '08', okt: '10', des: '12', nop: '11'
+        };
+
+        const m = MONTH_MAP[monStr.toLowerCase()];
+        
+        // Only process if we recognize the month
+        if (m) {
+            let y = yStr;
+            if (y.length === 2) {
+                // Assume 20xx for 2-digit years. 
+                // Adjust pivot if needed (e.g., if y > 80 assume 19xx), but for now 20xx is safe.
+                y = '20' + y; 
+            }
+
+            return `${y}-${m}-${d.padStart(2, '0')} ${h ? h.padStart(2, '0') : '00'}:${min ? min.padStart(2, '0') : '00'}:${s ? s.padStart(2, '0') : '00'}`;
+        }
     }
   }
 
